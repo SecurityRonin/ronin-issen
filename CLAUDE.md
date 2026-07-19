@@ -524,7 +524,7 @@ Full rules live in the global `~/.claude/CLAUDE.personal.md` ("SecurityRonin Rep
 - **Footer (mandatory, exact):** `[Privacy Policy](https://securityronin.github.io/<repo>/privacy/) · [Terms of Service](https://securityronin.github.io/<repo>/terms/) · © 2026 Security Ronin Ltd` — and `docs/privacy.md` + `docs/terms.md` **must exist** to back the links.
 - **Docs site must be LIVE at publish — no dangling links (publish gate).** A repo that carries a docs badge or the Pages footer links MUST ship a `.github/workflows/docs.yml` that builds mkdocs and deploys to GitHub Pages (reference: `browser-forensic/.github/workflows/docs.yml` — `mkdocs build --strict` → `configure-pages`/`upload-pages-artifact`/`deploy-pages`, pinned SHAs, `pages: write` + `id-token: write`), **and** Pages must be enabled (source = GitHub Actions). At publish, **verify the docs badge URL and the footer Privacy/Terms URLs actually resolve** (HTTP 200 *and* real content — beware fake-200s), exactly as the global "no dangling footer links" rule requires. A 404 docs badge on a published repo is the canonical dangling-link failure (it happened to sqlite-forensic — shipped with mkdocs.yml + docs/ but no deploy workflow, so the Pages URL 404'd). Never publish the badge before the site builds.
 - **Documentation site = MkDocs, never rustdoc-only (fleet standard). Reference implementation: `sqlite-forensic`.** Every fleet repo's docs site is a **curated MkDocs site** — `docs.yml` runs `mkdocs build --strict` and deploys the rendered site to Pages. A `cargo doc` / rustdoc deploy does **NOT** satisfy this: rustdoc serves an auto-generated API reference, not the curated pages that back the README **docs badge** and the **Privacy/Terms footer links** — so on a rustdoc-only repo those footer URLs 404 (the dangling-link failure above). Copy the three pieces from `sqlite-forensic` and adapt names:
-  1. **`mkdocs.yml`** — `site_name: <repo>`, `site_url: https://securityronin.github.io/<repo>/`, `repo_url`, `theme: { name: material }`, a `nav:` listing `index.md` + the repo's analysis docs (e.g. `validation.md`, `recovery-comparison.md`, `corpus-catalog.md`) + `privacy.md` + `terms.md`, `markdown_extensions` (`admonition`, `attr_list`, `md_in_html`, `pymdownx.superfences`, `tables`), `plugins: [search]`.
+  1. **`mkdocs.yml`** — `site_name: <repo>`, `site_url: https://securityronin.github.io/<repo>/`, `repo_url`, `theme: { name: material }`, a `nav:` listing `index.md` + the repo's analysis docs (e.g. `validation.md`, `recovery-comparison.md`, `test-data-catalog.md`) + `privacy.md` + `terms.md`, `markdown_extensions` (`admonition`, `attr_list`, `md_in_html`, `pymdownx.superfences`, `tables`), `plugins: [search]`.
   2. **`docs/`** — at minimum `index.md` + `privacy.md` + `terms.md` (the footer-link targets) + `validation.md` (the Doer-Checker evidence); add per-domain pages as warranted.
   3. **`.github/workflows/docs.yml`** — `pip install mkdocs mkdocs-material` → `mkdocs build --strict --site-dir site` → `actions/upload-pages-artifact` / `actions/configure-pages` / `actions/deploy-pages` (pinned SHAs), `permissions: pages: write` + `id-token: write`, triggered on push to `docs/**` + `mkdocs.yml` (+ `workflow_dispatch`).
   **Migration debt (as of 2026-06-15):** `memory-forensic`, `winevt-forensic`, `forensicnomicon`, and `srum-forensic` still ship a rustdoc-only `docs.yml` (`cargo doc`) with no `mkdocs.yml` — convert each to the MkDocs standard above (their README footer Privacy/Terms links currently 404).
@@ -534,7 +534,7 @@ Full rules live in the global `~/.claude/CLAUDE.personal.md` ("SecurityRonin Rep
 
 ## Test Corpus Catalog — keep it current (MANDATORY)
 
-`ronin-issen/docs/corpus-catalog.md` is the **single fleet-wide catalog** of all forensic test data —
+`ronin-issen/docs/test-data-catalog.md` is the **single fleet-wide catalog** of all forensic test data —
 real datasets (what + source + hotlinked download URL + MD5) and synthetic fixtures (the **exact
 command line(s)** that produce them). Because `tests/data/` is gitignored, this catalog is the only
 committed record others can use to reproduce the corpus.
@@ -573,7 +573,7 @@ live "inside" `<x>-core`).
 **Source / Identity / writeup URL(s) / original download URL (hotlinked) / MD5 (or sha256) / notable
 contents** for real datasets, and the **verbatim generator command** (or builder `fn` at `file:line`)
 for synthetic fixtures — never a download URL for something we generate. The README is the co-located
-human-facing detail; `docs/corpus-catalog.md` stays the single machine-index — **cross-reference, never
+human-facing detail; `docs/test-data-catalog.md` stays the single machine-index — **cross-reference, never
 duplicate** (the README links up to the catalog). Document large untracked/gitignored artifacts here
 too (provenance even when the bytes aren't committed — e.g. a vendored oracle's test corpus). Use
 straight ASCII in paths/commands.
