@@ -131,7 +131,7 @@ as of 2026-06-29 — pull from CFReDS instead. **Bytes not yet downloaded**; siz
 filled from CFReDS on acquisition. Detail: `issen/tests/data/README.md` → `magnet-summit-2025-ctf/`.
 
 ### A3 · DFIR Madness "Stolen Szechuan Sauce" Case 001 (~13 GB) · REAL-ext ✓ · **T1**
-Folder: `tests/data/DFIR Madness "Stolen Szechuan Sauce" Case 001 — Windows 10/` (name predates the
+Folder: `tests/data/dfirmadness-szechuan-sauce/` (folder name predates the
 DC host; now holds **both**). By James Smith (dfirmadness.com). **Downloaded in full**
 (2026-06-09) — all 11 files:
 
@@ -160,13 +160,13 @@ service masquerade (453 services → 7-entry System32-root OwnProcess gate set �
 `coreupdater.exe` the lone uncatalogued one). Redistribution: dfirmadness.com —
 educational/research.
 
-> **Naming convention — `case001-*` clean siblings (binding).** Derived/reference assets of this
-> dataset live in **clean-named siblings** of the A3 folder, not inside it: `tests/data/case001-hives/`
-> (§A3b, code-referenced by ~10 parser tests) and `tests/data/case001-writeups/` (the published
-> answer-key + writeup HTML, reference-only). Reason: the source folder name
-> (`DFIR Madness "Stolen Szechuan Sauce" Case 001 — Windows 10`) is **path-hostile** — spaces, literal
-> `"` quotes, an em-dash `—` — which is fragile inside Rust `include!`/`Path::new` literals and shell.
-> Clean `case001-<asset>/` siblings keep those paths robust; this catalog is the cross-reference.
+> **Derived / reference assets (subdirectories of the A3 folder).** Extracted and reference material
+> lives in named subdirectories of `dfirmadness-szechuan-sauce/`, beside the raw zips:
+> `extracted/szechuan-sauce-hives/` (§A3b, code-referenced by ~10 parser tests) and
+> `szechuan-sauce-writeups/` (the published answer-key + writeup HTML, reference-only). The folder and
+> every path under it are clean — lowercase, hyphenated, no spaces/quotes/em-dashes — so they are safe
+> inside Rust `include!`/`Path::new` literals and shell. Per-file MD5 manifest (all 11 files):
+> `issen/tests/data/README.md` → `dfirmadness-szechuan-sauce/`; this catalog is the cross-reference.
 
 #### A3b · Registry hives extracted from `DC01-ProtectedFiles.zip` (loose, gitignored) · REAL-ext ✓ · **T1**
 
@@ -175,13 +175,13 @@ Used by the registry parsers' real-data CADET category tests
 which skip cleanly when absent). **NO download — extract from A3's `DC01-ProtectedFiles.zip`:**
 
 ```sh
-cd "tests/data/DFIR Madness \"Stolen Szechuan Sauce\" Case 001 — Windows 10/"
+cd tests/data/dfirmadness-szechuan-sauce
 unzip -o -j DC01-ProtectedFiles.zip Protected/SAM Protected/SECURITY Protected/software \
-  Protected/system Users/Administrator/NTUSER.DAT -d ../case001-hives
-cd ../case001-hives && mv -f software SOFTWARE && mv -f system SYSTEM
+  Protected/system Users/Administrator/NTUSER.DAT -d extracted/szechuan-sauce-hives
+cd extracted/szechuan-sauce-hives && mv -f software SOFTWARE && mv -f system SYSTEM
 ```
 
-Yields `tests/data/case001-hives/{SAM,SECURITY,SOFTWARE,SYSTEM,NTUSER.DAT}` (all `regf`). MD5s:
+Yields `tests/data/dfirmadness-szechuan-sauce/extracted/szechuan-sauce-hives/{SAM,SECURITY,SOFTWARE,SYSTEM,NTUSER.DAT}` (all `regf`). MD5s:
 
 | Hive | Bytes | MD5 |
 |---|---|---|
@@ -196,7 +196,7 @@ Yields `tests/data/case001-hives/{SAM,SECURITY,SOFTWARE,SYSTEM,NTUSER.DAT}` (all
 examples (`extract_usrclass` / `extract_amcache` / `extract_security`):
 
 ```sh
-unzip -o -j "DFIR Madness .../DESKTOP-E01.zip" '*.E0*' -d /tmp/desktop-e01   # ~6.4GB, 4 EWF segments
+unzip -o -j dfirmadness-szechuan-sauce/DESKTOP-E01.zip '*.E0*' -d /tmp/desktop-e01   # ~6.4GB, 4 EWF segments
 E01=/tmp/desktop-e01/20200918_0417_DESKTOP-SDN1RPT.E01
 cargo run --release --example extract_usrclass -- "$E01" tests/data/case001-hives
 cp -f tests/data/case001-hives/UsrClass-ricksanchez.dat tests/data/case001-hives/UsrClass.dat   # primary user
@@ -317,7 +317,7 @@ Published challenge by **Hal Pomeranz** (Righteous IT), "Linux Forensic Scenario
 high-CPU process, reverse shell on 22/tcp; single `worker` account with NOPASSWD sudo; jump host
 192.168.4.35), then captured with **UAC** (github.com/tclahr/uac). Our `…234043.tar.gz` (5.9 GB,
 incl. `memory_dump/avml.lime` ~5.5 GB) **is Hal's published download**; `…193807.tar.gz` (143 MB,
-fs-only, CI) is a smaller companion capture. **Used by** `rt-parser-uac`, `rt-navigator`, AVML
+fs-only, CI) is a smaller companion capture. **Used by** `issen-parser-uac`, `issen-navigator`, AVML
 provider + Linux process/module/network walking.
 **Download:** scenario <https://righteousit.com/2026/03/27/linux-forensic-scenario/> · image (the
 5.9 GB `…234043.tar.gz`)
@@ -330,7 +330,7 @@ IT — credit the author.
 artifact `Windows.KapeFiles.Targets` (`_SANS_Triage`). Host `A380` / Win11 Pro 24H2 / standalone /
 operator `4n6h4x0r`, 2025-08-10. Disk-artifact triage only (no RAM), 2,952 files. Benign baseline
 (real daily-driver host), **not** an intrusion scenario; virtualization undetected (may be bare
-metal). **Used by** `rt-parser-velociraptor`, `rt-navigator`. Redistribution: self-generated
+metal). **Used by** `issen-parser-velociraptor`, `issen-navigator`. Redistribution: self-generated
 (contains personal artifacts — sanitize before external sharing).
 **Download:** none — self-collected, not publicly hosted (regenerate with the Velociraptor offline
 collector, `Windows.KapeFiles.Targets` + `_SANS_Triage`, on any Windows host).
@@ -925,7 +925,7 @@ re-running `cargo fuzz`; safe to regenerate/delete.
 File hashes of every downloadable corpus artifact (`md5`, 2026-06-09). `tests/data/` is gitignored,
 so these are recorded here. Verify a download with `md5 <file>` (macOS) / `md5sum <file>` (Linux) /
 `Get-FileHash -Algorithm MD5 <file>` (PowerShell). `Szechuan/` = the
-`DFIR Madness "Stolen Szechuan Sauce" Case 001 — Windows 10/` folder.
+`dfirmadness-szechuan-sauce/` folder.
 
 | File | Size (bytes) | MD5 |
 |---|---|---|
