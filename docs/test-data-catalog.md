@@ -7,6 +7,24 @@ each artifact is, where real data came from, and how synthetic data was made. Li
 _Compiled 2026-06-09. Sizes are on-disk (`du`). Most large real datasets are **gitignored** —
 download/regenerate per the provenance notes; they are not committed._
 
+## Validation tiers
+
+Every entry below is tagged **T1/T2/T3** by the fleet Evidence-Based Rigor axis — *who vouches for
+the ground truth*, not whether the bytes are "synthetic":
+
+- **T1** — an independent third party authored the artifact **and** the answer key, **or** it is
+  real-world data (real disk/memory images, published corpora, genuine OS artifacts, real carved
+  files — even small ones).
+- **T2** — real engine/tool **output** whose ground truth is derivable from documented construction
+  **or** confirmed by an **independent oracle**, but *we* chose the scenario (images minted with
+  `qemu-img`/`mkfs`/`hdiutil`/`sgdisk`/… and reconciled against Sleuth Kit, `qemu-img`, `udfinfo`,
+  a reference codec, …). A minted/synthetic fixture **with** an independent oracle is **T2, not T3**.
+- **T3** — we authored **both** the fixture and the expected answer with nothing independent
+  vouching (hand-built byte buffers, spec-exact detection fixtures, PRNG/fuzz corpora, pure
+  synthetic schemas).
+
+Entries bundling artifacts of different tiers carry the headline tier plus a `(mixed: …)` note.
+
 ## Legend & classification
 
 | Class | Meaning |
@@ -87,7 +105,7 @@ downloaded).
 
 ## A. Real case & CTF datasets — `issen/tests/data/`
 
-### A1 · DEF CON DFIR CTF 2018 — `MaxPowersCDrive.E01` (29 GB) · REAL-ext ✓
+### A1 · DEF CON DFIR CTF 2018 — `MaxPowersCDrive.E01` (29 GB) · REAL-ext ✓ · **T1**
 C: drive of user `mpowers`. EWF case "MaxPowers-1", examiner "Professor Frink", acquired 2018-05-05
 via f-response. **MD5** `10c1fbc9c01d969789ada1c67211b89f`. Has pagefile/swapfile, no hiberfil.
 Source: hecfblog Daily Blog 451; writeup or10nlabs.tech. **Used by** `ntfs-forensic` boot-sector
@@ -95,13 +113,13 @@ ground-truth (see C-layer). Redistribution: DEF CON public CTF — non-commercia
 **Download:** <https://www.hecfblog.com/2018/08/daily-blog-451-defcon-dfir-ctf-2018.html> (Image 3;
 original `https://www.dropbox.com/s/jvaqb4rfi3jojbk/Image3.7z` may be expired).
 
-### A2 · Magnet Virtual Summit 2023 CTF — `PC-MUS-001.E01` (49 GB) · REAL-ext ✓
+### A2 · Magnet Virtual Summit 2023 CTF — `PC-MUS-001.E01` (49 GB) · REAL-ext ✓ · **T1**
 Win11 physical drive. By Jessica Hyde + Champlain College DFA for Magnet. EnCase 6, acquired
 2023-01-07. **MD5** `522df9db8289f4f8132cf47b14d20fb8`. Contains `hiberfil.sys` (MFT #54, 3.37 GB)
 — real corpus for the `memf-format` hiberfil provider. Redistribution: Magnet/Champlain — verify.
 **Download:** <https://getdataforensics.com/capture-the-flag/> (Magnet Virtual Summit 2023 — Win11).
 
-### A2b · Magnet Virtual Summit **2025** CTF — Hexordia (iOS 18 / Android 14 / Win 11 / Chromebook) · REAL-ext `?` (download pending)
+### A2b · Magnet Virtual Summit **2025** CTF — Hexordia (iOS 18 / Android 14 / Win 11 / Chromebook) · REAL-ext `?` (download pending) · **T1**
 
 By the **Hexordia** team (Kevin Pagano) with Champlain College DFA interns, for Magnet Forensics.
 Scenario: personas "Ruth" + "Mary", Nov–Dec 2024, across mobile/computer/web. Authoritative public
@@ -112,7 +130,7 @@ holds `userbss.ad1` (AccessData **AD1** logical image) among others, but is **Go
 as of 2026-06-29 — pull from CFReDS instead. **Bytes not yet downloaded**; sizes + MD5/SHA256 to be
 filled from CFReDS on acquisition. Detail: `issen/tests/data/README.md` → `magnet-summit-2025-ctf/`.
 
-### A3 · DFIR Madness "Stolen Szechuan Sauce" Case 001 (~13 GB) · REAL-ext ✓
+### A3 · DFIR Madness "Stolen Szechuan Sauce" Case 001 (~13 GB) · REAL-ext ✓ · **T1**
 Folder: `tests/data/DFIR Madness "Stolen Szechuan Sauce" Case 001 — Windows 10/` (name predates the
 DC host; now holds **both**). By James Smith (dfirmadness.com). **Downloaded in full**
 (2026-06-09) — all 11 files:
@@ -150,7 +168,7 @@ educational/research.
 > `"` quotes, an em-dash `—` — which is fragile inside Rust `include!`/`Path::new` literals and shell.
 > Clean `case001-<asset>/` siblings keep those paths robust; this catalog is the cross-reference.
 
-#### A3b · Registry hives extracted from `DC01-ProtectedFiles.zip` (loose, gitignored) · REAL-ext ✓
+#### A3b · Registry hives extracted from `DC01-ProtectedFiles.zip` (loose, gitignored) · REAL-ext ✓ · **T1**
 
 Used by the registry parsers' real-data CADET category tests
 (`crates/parsers/issen-parser-{runkeys,userassist,shimcache,sam,shellbags,registry,typedurls,svcdiff}/tests/real_hive_category.rs`,
@@ -201,7 +219,7 @@ on domain-member workstations with cached-logon enabled; none of our images mate
 `svcdiff` & `comhijack` were NOT data gaps — they were parser bugs, fixed in **winreg-artifacts 0.1.2**
 (offline `ControlSet001` resolution / `UsrClass.dat` root CLSID) and now tagged.
 
-#### A3c · LZNT1 real-stream regression fixtures (`ntfs-forensic/tests/data/`) · REAL-ext ✓
+#### A3c · LZNT1 real-stream regression fixtures (`ntfs-forensic/tests/data/`) · REAL-ext ✓ · **T1**
 
 Carved from A3's **DC01 C: drive** E01 to pin the `lznt1` LZNT1 codec to a genuine on-disk
 NTFS-compressed stream with **TSK as the independent plaintext oracle** (`ntfs-forensic/core/tests/lznt1_real.rs`).
@@ -223,7 +241,7 @@ Verified `ntfs_core::decompress(lznt1_real.bin)` truncated to 1832 B equals `lzn
 | `lznt1_real.bin` (raw LZNT1 stream, 1 cluster) | 4096 | `8c791f1d34a7f4a9aaeaddce71210a26` |
 | `lznt1_real.expected` (TSK `icat` plaintext) | 1832 | `f4cc46d7e07ab76540a46471622e10af` |
 
-#### A3d · Recycle Bin `$I` index extracted from A3's DC01 C: drive (recyclebin-forensic wiring validation) · REAL-ext ✓
+#### A3d · Recycle Bin `$I` index extracted from A3's DC01 C: drive (recyclebin-forensic wiring validation) · REAL-ext ✓ · **T1**
 
 Carved from A3's **DC01 C: drive** E01 to validate the `issen-parser-recyclebin` wiring
 (`recyclebin-core`) against a genuine on-disk `$I` index, with **`rifiuti-vista` as the independent
@@ -250,7 +268,7 @@ DC-only E01.)
 |---|---|---|
 | `$IU2L112.txt` (raw v1 `$I` index, icat inode 87102) | 544 | `ba140375cf27bf63268784cd71a18827` |
 
-#### A3e · Single `$MFT` record from A3's DC01 C: drive (FILETIME 100 ns-precision guard) · REAL-ext ✓
+#### A3e · Single `$MFT` record from A3's DC01 C: drive (FILETIME 100 ns-precision guard) · REAL-ext ✓ · **T1**
 
 One 1024-byte `$MFT` FILE record carved from A3's **DC01 C: drive** E01 to guard `issen-mft-tree`'s
 FILETIME precision (the `mft` crate's `winstructs` truncates 100 ns → µs). Entry **74419** (seq 1):
@@ -272,7 +290,7 @@ Consumed by `from_mft_preserves_100ns_filetime_precision` (`issen-mft-tree/src/p
 tree) and `parse_preserves_100ns_si_precision` (`issen-parser-mft/src/lib.rs`, the timeline ingester);
 per-repo detail in [`issen-mft-tree/tests/data/README.md`](../crates/issen-mft-tree/tests/data/README.md).
 
-#### A3a · Prefetch fixtures derived from A3 (committed in two repos) · SYNTHETIC-from-REAL ✓
+#### A3a · Prefetch fixtures derived from A3 (committed in two repos) · SYNTHETIC-from-REAL ✓ · **T1** (mixed: also T2 — xpress-huffman codec vectors vs dissect.util oracle)
 
 Three Win10 `.pf` files extracted from the Case 001 **Desktop** image above, small enough to commit
 (provenance confirmed by parsing, not filename). Cross-ref the per-repo `tests/data/README.md`; do
@@ -291,7 +309,7 @@ these (the `MAM\x04` payload with the 8-byte header stripped, plus the decompres
 external-oracle validation (dissect.util byte-identical, windowsprefetch field-match) live in each
 repo's `tests/data/README.md` and `docs/validation.md`.
 
-### A4 · Hal Pomeranz "Linux Forensic Scenario" (Righteous IT) (5.9 GB) · REAL-ext ✓
+### A4 · Hal Pomeranz "Linux Forensic Scenario" (Righteous IT) (5.9 GB) · REAL-ext ✓ · **T1**
 Published challenge by **Hal Pomeranz** (Righteous IT), "Linux Forensic Scenario" contest
 (2026-03-27): a Linux CI/CD-pipeline worker VM deliberately compromised (planted malware, hidden
 high-CPU process, reverse shell on 22/tcp; single `worker` account with NOPASSWD sudo; jump host
@@ -305,7 +323,7 @@ provider + Linux process/module/network walking.
 · class <https://archive.org/details/HalLinuxForensics/>. Redistribution: Hal Pomeranz / Righteous
 IT — credit the author.
 
-### A5 · Collection-A380 — **Velociraptor** (2.2 GB) · REAL-self ✓
+### A5 · Collection-A380 — **Velociraptor** (2.2 GB) · REAL-self ✓ · **T1**
 `Collection-A380_localdomain-2025-08-10T03_41_20Z.zip`. Velociraptor offline collector v0.74.5,
 artifact `Windows.KapeFiles.Targets` (`_SANS_Triage`). Host `A380` / Win11 Pro 24H2 / standalone /
 operator `4n6h4x0r`, 2025-08-10. Disk-artifact triage only (no RAM), 2,952 files. Benign baseline
@@ -315,7 +333,7 @@ metal). **Used by** `rt-parser-velociraptor`, `rt-navigator`. Redistribution: se
 **Download:** none — self-collected, not publicly hosted (regenerate with the Velociraptor offline
 collector, `Windows.KapeFiles.Targets` + `_SANS_Triage`, on any Windows host).
 
-### A6 · Memory-forensics CTFs · REAL-ext ✓
+### A6 · Memory-forensics CTFs · REAL-ext ✓ · **T1**
 All four **confirmed** 2026-06-09 by inspecting the archive contents + web corroboration (not just
 filenames). Not yet referenced by a committed test.
 
@@ -370,7 +388,7 @@ MemLabs MIT — verify before redistribution.
 
 ---
 
-### A7 · Josh Hickman iOS 17.3 image — Apple Biome **SEGB** streams (22 GB `.tar.gz`) · REAL-ext ✓
+### A7 · Josh Hickman iOS 17.3 image — Apple Biome **SEGB** streams (22 GB `.tar.gz`) · REAL-ext ✓ · **T1**
 
 Public iOS file-system image by **Joshua Hickman** (The Binary Hick), hosted by **DigitalCorpora** —
 a synthetic test persona (`thisisdfir@gmail.com`), freely licensed for training/education/testing/
@@ -408,7 +426,7 @@ image-creation doc (hashes, app list):
   only the biome subset kept on disk). Note: `App.MenuItem` is macOS-Tahoe-26-only, so it is **not**
   in this iOS image — this validates the SEGB *container*, not the App.MenuItem protobuf field mapping.
 
-### A7b · Josh Hickman **macOS Big Sur** image — APFS, split EWF-in-zip (32 GiB zip → 80 GB image) · REAL-ext ✓
+### A7b · Josh Hickman **macOS Big Sur** image — APFS, split EWF-in-zip (32 GiB zip → 80 GB image) · REAL-ext ✓ · **T1**
 
 Public **macOS Big Sur** forensic reference image by **Joshua Hickman** (The Binary Hick), freely
 licensed for training/education/testing/research (attribution). An 80 GB **APFS** virtual disk
@@ -432,7 +450,7 @@ VM, packaged as a 22-segment split EWF inside one zip. Writeup:
   issen's **EWF zip-direct + `DeflateSeekReader` (zran)** path — a genuine multi-segment Deflated
   E01-in-zip, the exact shape that exercises bounded-RAM seekable-DEFLATE segment reads.
 
-### A8 · LogHub `OpenSSH_2k.log` — real sshd `auth.log` (220 KB) · REAL-ext ✓
+### A8 · LogHub `OpenSSH_2k.log` — real sshd `auth.log` (220 KB) · REAL-ext ✓ · **T1**
 
 Pre-journald **real** Linux SSH auth events (text `auth.log` syslog format) from a real `LabSZ`
 server — unsanitized, with genuine attacker IPs / brute-force `Failed password` floods / invalid
@@ -447,7 +465,7 @@ Redistribution: freely available for research; cite loghub (Zhu et al., ISSRE 20
 
 ## B. Disk-image / container-format fixtures
 
-### B1 · qcow2-forensic — `tests/data/cirros-0.6.3-x86_64-disk.img` (21 MB) · REAL-ext ✓
+### B1 · qcow2-forensic — `tests/data/cirros-0.6.3-x86_64-disk.img` (21 MB) · REAL-ext ✓ · **T1** (mixed: also T2 qemu-img differential, T3 in-code synthetic buffers)
 CirrOS 0.6.3 (repo-root `tests/data/`). Redistribution: CirrOS permissive.
 **Download:** <https://download.cirros-cloud.net/0.6.3/cirros-0.6.3-x86_64-disk.img>.
 **CI coverage is driven from committed bytes only** — every reader feature branch
@@ -460,7 +478,7 @@ builders: `testutil::test_qcow2`, `lib.rs::compressed_qcow2`/`qcow2_header_bytes
 variants (`core/tests/real_images.rs`, `docs/validation.md`) remain the env-gated **Tier-1
 correctness** path and do NOT drive the coverage gate.
 
-### B2 · ewf-forensic — `tests/data/` · SYNTHETIC + VENDORED ✓
+### B2 · ewf-forensic — `tests/data/` · SYNTHETIC + VENDORED ✓ · **T2** (ewfacquire/libewf output; mixed: also T1 vendored sleuthkit blobs)
 Synthetic E01/Ex01 built with `ewfacquire`, exact recipes in `tests/data/README.md`:
 ```bash
 # zeros_128s.Ex01
@@ -476,7 +494,7 @@ VENDORED error-path blobs from sleuthkit `test/data`: `bogus.E01`/`E02` (0-byte)
 `zeros_128s_compressed.Ex01` hand-built via Python `zlib.compress(level=1)` (structure documented,
 command not scripted). Fuzz corpus 188 KB / 1.1 MB.
 
-### B3 · vmdk-forensic — `core/tests/data/` (6.8 MB) · SYNTHETIC ✓
+### B3 · vmdk-forensic — `core/tests/data/` (6.8 MB) · SYNTHETIC ✓ · **T2** (qemu-img authored)
 `qemu-img`, per `core/tests/data/README.md`:
 ```bash
 qemu-img create -f vmdk minimal.vmdk 1M
@@ -485,7 +503,7 @@ qemu-img create -f vmdk -o subformat=twoGbMaxExtentFlat flat.vmdk 1M
 ```
 Fuzz corpus 111 MB (coverage-guided).
 
-### B4 · vhdx-forensic — `*/tests/data` (~121 MB) · SYNTHETIC ✓ / ~
+### B4 · vhdx-forensic — `*/tests/data` (~121 MB) · SYNTHETIC ✓ / ~ · **T2** (qemu-img / Hyper-V authored)
 `qemu-img`, per `docs/validation.md`:
 ```bash
 qemu-img create -f vhdx                  qemu_empty_dynamic.vhdx 16M
@@ -495,22 +513,22 @@ qemu-img create -f vhdx -o subformat=fixed qemu_fixed.vhdx        8M
 committed without a scripted command — provenance **~** (Hyper-V tooling, not recorded).
 `_archived/vhdx-core` holds the pre-split legacy copies (86 MB).
 
-### B5 · vhd — `vhd/tests/data/` (5 MB) · SYNTHETIC ✓
+### B5 · vhd — `vhd/tests/data/` (5 MB) · SYNTHETIC ✓ · **T2** (qemu-img authored)
 `qemu-img`, per `vhd/tests/data/README.md`:
 ```bash
 qemu-img create -f vpc                  minimal.vhd 1M
 qemu-img create -f vpc -o subformat=fixed fixed.vhd 1M
 ```
 
-### B6 · dd — `dd/dd/tests/data/` (16 MB) · SYNTHETIC ~  ·  dmg — `dmg/dmg/tests/data/` (840 KB) · REAL-self ~
+### B6 · dd — `dd/dd/tests/data/` (16 MB) · SYNTHETIC ~  ·  dmg — `dmg/dmg/tests/data/` (840 KB) · REAL-self ~ · **T2** (dmg via hdiutil; mixed: also T3 — dd raw, no oracle)
 dmg fixtures via macOS `hdiutil`; dd raw images for the flat provider. **Generators not scripted in
 the repos** — provenance ~ (regenerate dd via `dd if=… of=…`; dmg via `hdiutil create`).
 
-### B7 · aff4 — `aff4/tests/data/` (14 MB) · REAL-ext + VENDORED ✓
+### B7 · aff4 — `aff4/tests/data/` (14 MB) · REAL-ext + VENDORED ✓ · **T1**
 Evimetry/AFF4 sample images; **VENDORED** AFF4 Canonical Images from github.com/aff4/Standard.
 Redistribution: AFF4 standard suite license.
 
-### B8 · iso9660-forensic — `iso/tests/data/` (1.7 GB) · REAL-ext + SYNTHETIC ✓
+### B8 · iso9660-forensic — `iso/tests/data/` (1.7 GB) · REAL-ext + SYNTHETIC ✓ · **T1** (mixed: also T2 — xorriso/hdiutil-minted ISOs)
 Synthetic ISOs via `xorriso`/`hdiutil` + real downloads, per `docs/validation.md` (`SRC` = a
 populated source dir):
 ```bash
@@ -526,7 +544,7 @@ Real OS ISOs (**gitignored, user-downloaded**): `debian-13.5.0-amd64-netinst.iso
 Windows Server `17763.1.*.iso` (335 MB — MS license, do not redistribute). **issen mirror:**
 `crates/issen-iso/tests/data/ubuntu-20.04-mini.iso` (74 MB, Canonical).
 
-### B9 · udf-forensic — `tests/data/udf_{vat,spar,plain}.img` (8 MB each, committed) · REAL-self ✓
+### B9 · udf-forensic — `tests/data/udf_{vat,spar,plain}.img` (8 MB each, committed) · REAL-self ✓ · **T2** (mkudffs-minted, `udfinfo` oracle)
 Real UDF images authored by **`mkudffs` (udftools 2.3)** and cross-checked by the independent
 **`udfinfo`** decoder (the oracle). Mostly-zero, so committed (a `.gitignore` negation un-ignores them);
 excluded from the published crate via `Cargo.toml` `exclude = ["tests/data/*.img"]`. Minted on macOS via
@@ -547,18 +565,18 @@ mkudffs output is freely redistributable.
 
 ## C. Filesystem / partition / compression fixtures
 
-### C1 · ntfs-forensic — `core/tests/data/defcon2018_cdrive_boot.bin` (4 KB) · REAL-ext ✓
+### C1 · ntfs-forensic — `core/tests/data/defcon2018_cdrive_boot.bin` (4 KB) · REAL-ext ✓ · **T1**
 NTFS boot sector extracted from the **DEF CON 2018** `MaxPowers` E01 via TSK
 `fsstat -o 1026048`. Ground-truth values asserted in `core/tests/real_image.rs`. Redistribution:
 DEF CON CTF.
 
-### C2 · mft — `samples/MFT` (13 MB) + `samples/entry_*` + `testdata/*` · REAL ? 
+### C2 · mft — `samples/MFT` (13 MB) + `samples/entry_*` + `testdata/*` · REAL ? · **T1** (real $MFT; provenance undocumented) 
 A full real `$MFT` plus hand-picked single records exercising fixup/data-run/ADS edge cases
 (`entry_102130_fixup_issue`, `entry_long_name_and_res_ads_002`, …), extracted via `icat`. **Source
 image not documented — provenance undetermined; likely private casework.** Flag for redistribution
 review before any external release.
 
-### C3 · ext4fs-forensic — `tests/data/{minimal,forensic}.img` (10 MB) · SYNTHETIC ✓
+### C3 · ext4fs-forensic — `tests/data/{minimal,forensic}.img` (10 MB) · SYNTHETIC ✓ · **T2** (mkfs.ext4-minted, Sleuth Kit oracle)
 Built by committed scripts `tests/create-minimal-image.sh` and `tests/create-forensic-img.sh`
 (the latter in a `--privileged debian:bookworm-slim` container):
 ```bash
@@ -578,7 +596,7 @@ deleted inodes 21/22 (`EXT4-DELETED-INODE`), `fsstat` → 1 block group / no SB 
 (`EXT4-SUPERBLOCK-BACKUP-MISMATCH` empty), `jls` → journal commit order. See
 `ext4fs-forensic/docs/validation.md` § "Finding adapter".
 
-### C4 · hfsplus-forensic — `tests/data/hfs_plus_*.bin` (1.6 MB) · REAL-self ✓
+### C4 · hfsplus-forensic — `tests/data/hfs_plus_*.bin` (1.6 MB) · REAL-self ✓ · **T2** (hdiutil-minted, Sleuth Kit oracle)
 HFS+ volumes created via macOS `hdiutil create -layout SPUD`; real Apple filesystem structures
 with known files (`HELLO.TXT` = "hello hfs"). Asserted in `tests/catalog.rs`. These same images
 (plus C4b's `hfs_decmpfs_volume.bin`) also back the **HFS+ anomaly analyzer** (`findings::audit`,
@@ -587,7 +605,7 @@ with known files (`HELLO.TXT` = "hello hfs"). Asserted in `tests/catalog.rs`. Th
 present — all agree, 0 anomalies); positives are crafted in-test by flipping real volume bytes
 (no new committed fixtures).
 
-### C4b · hfsplus-forensic decmpfs — `tests/data/decmpfs/` (~4.3 MB) · REAL-self ✓
+### C4b · hfsplus-forensic decmpfs — `tests/data/decmpfs/` (~4.3 MB) · REAL-self ✓ · **T2** (Apple-compressor output, kernel/original-file oracle; mixed: also T3 — one synthetic `zlib_type3_stored`)
 HFS+/APFS transparent-compression (`decmpfs`) fixtures — **every codec validated against REAL
 macOS-produced bytes** (oracle = the original file). **LZVN (7/8):** `lzvn.rsrc`+`lzvn.expected`
 (`ditto --hfsCompression`, type-8, 2×64 KiB, 80000 B) and `hfs_decmpfs_volume.bin` (4 MiB layout-NONE
@@ -608,7 +626,7 @@ Apple `COMPRESSION_LZVN` (`0x900`) + the kernel's transparent read. Exposed 2 bu
 fixtures masked — type-8 strict-trailing reject (fixed via the `lzvn` crate) and type-9 unstripped
 marker — taking real-sample decoding from **0/35 → 35/35**.
 
-### C5 · apm-partition-forensic — `tests/data/apm_map{,_32k}.bin` · REAL-self ✓
+### C5 · apm-partition-forensic — `tests/data/apm_map{,_32k}.bin` · REAL-self ✓ · **T2** (hdiutil-minted, `mmls`+`pdisk` oracles — doc calls it "Tier-1 differential")
 Apple Partition Map + DDM from `hdiutil` HFS+ images (2 partitions: `Apple_partition_map` +
 `Apple_HFS`, block size 512). `apm_map.bin` (2 KB, md5 `5d87d4730a865a763f49180a7949b8e2`)
 drives `forensic/tests/map.rs` + `analyse_tests.rs`. **`apm_map_32k.bin`** (32 KB, md5
@@ -621,11 +639,11 @@ hdiutil create -size 8m -layout SPUD -fs HFS+ -volname OracleTest /tmp/apm_oracl
 dd if=/tmp/apm_oracle.dmg of=tests/data/apm_map_32k.bin bs=1024 count=32
 ```
 
-### C6 · usnjrnl-forensic — feature-gated `tests/data/` · REAL-ext ✓ (external)
+### C6 · usnjrnl-forensic — feature-gated `tests/data/` · REAL-ext ✓ (external) · **T1** (consumes Szechuan desktop E01)
 Uses the **Szechuan Sauce desktop E01** (A3) for `image_integration.rs` / `precision_recall.rs`
 (`#[ignore]`, manual placement). Own committed `tests/data` is 0 B (report tests are synthetic).
 
-### C7 · dar-forensic — `forensic/tests/data/v7..v11_hello.dar` (5 files) · SYNTHETIC ✓
+### C7 · dar-forensic — `forensic/tests/data/v7..v11_hello.dar` (5 files) · SYNTHETIC ✓ · **T2** (upstream `dar` releases authored each format)
 Each archive built with the matching upstream `dar` release (2.3.12→2.8.5 = format 7→11; v7 in a
 `gcc:4.9` container), per `forensic/tests/data/README.md`:
 ```bash
@@ -634,7 +652,7 @@ mkdir -p /tmp/corpus/files && printf 'hello format 7\n' > /tmp/corpus/files/hell
 # then dar 2.4.24 → v8, 2.5.3 → v9, 2.6.16 → v10, 2.8.5 → v11 (same shape, version-specific text)
 ```
 
-### C8 · lzo — `tests/data/*.{raw,lzo}` (8 pairs) · SYNTHETIC + REAL ✓
+### C8 · lzo — `tests/data/*.{raw,lzo}` (8 pairs) · SYNTHETIC + REAL ✓ · **T2** (reference `liblzo2` oracle)
 `.lzo` produced by the reference `liblzo2` via `validation/lzo_compress.c`, per `docs/validation.md`:
 ```bash
 cc -O2 -I"$(brew --prefix lzo)/include" validation/lzo_compress.c -L"$(brew --prefix)/lib" -llzo2 -o /tmp/lzo_compress
@@ -643,7 +661,7 @@ cc -O2 -I"$(brew --prefix lzo)/include" validation/lzo_compress.c -L"$(brew --pr
 ```
 `.raw` inputs = hand-crafted probes + the project's own `README.md`/`src/lib.rs`.
 
-### C8b · lzvn (`SecurityRonin/lzvn`, crate `lzvn-core`) — `tests/data/*.{lzvn,expected}` (4 pairs) · SYNTHETIC (Apple-encoded) ✓
+### C8b · lzvn (`SecurityRonin/lzvn`, crate `lzvn-core`) — `tests/data/*.{lzvn,expected}` (4 pairs) · SYNTHETIC (Apple-encoded) ✓ · **T2** (Apple encoder over synthetic inputs; mixed: also T1 — 25 real macOS 26.5 blocks)
 `.lzvn` = real Apple LZVN streams from Apple's own `compression_encode_buffer(COMPRESSION_LZVN, 0x900)`
 over synthetic inputs (`text_small`, `text_repeats` = heavy match/overlap, `mixed`, `near_random`), each
 padded with trailing bytes after end-of-stream to exercise length-tolerance (the `decmpfs` block shape).
@@ -651,7 +669,7 @@ Inputs are synthetic so the fixtures are freely redistributable. The decoder was
 against the 25 real macOS 26.5 type-8 blocks above (C4b `tahoe_type8.*`) vs the same Apple oracle. Generator
 in `lzvn/docs/validation.md`; fuzz target `decode` (clean over 1.37M runs).
 
-### C9 · gpt-partition-forensic — `tests/data/gpt_real_3part.img` (8 MiB) · REAL-self ✓
+### C9 · gpt-partition-forensic — `tests/data/gpt_real_3part.img` (8 MiB) · REAL-self ✓ · **T2** (sgdisk-minted, TSK `mmls` oracle — doc calls it "Tier-1 differential")
 Real GPT disk image, **minted by `sgdisk` (GPT fdisk 1.0.10)** and independently re-decoded by
 **TSK `mmls` 4.12.1** (separate codebases — the cross-tool oracle). MD5 `cbda08767efb84203c5f02b827fc2a94`.
 3 partitions (BASICDATA/Microsoft-basic-data, LINUXFS/Linux-filesystem, EFISYSTEM/EFI-system) with
@@ -659,17 +677,17 @@ distinct type + unique GUIDs; whole 8 MiB committed so primary **and** backup GP
 Generator (verbatim) + captured oracle output in `gpt-partition-forensic/tests/data/README.md`;
 consumed by `forensic/tests/real_gpt_oracle.rs` (Tier-1 structural-parse differential).
 
-### C9b · mbr-partition-forensic, ntfs/usnjrnl records · SYNTHETIC ✓
+### C9b · mbr-partition-forensic, ntfs/usnjrnl records · SYNTHETIC ✓ · **T3** (hand-built anomaly-detector fixtures, no oracle)
 No committed images — fixtures are constructed **byte-by-byte by Rust builders in the tests** (no
 shell): gpt anomaly-**detector** fixtures `header_sector()`/`entry_bytes()`/`build()`
 (`forensic/tests/reconcile_tests.rs`; need deliberately corrupted bytes no tool mints), mbr
 `windows7_boot()`/`disk_with_boot_and_serial()` (`forensic/tests/disk_signature_tests.rs`), and the
 ntfs/usnjrnl USN+MFT record constructors in unit tests. Fuzz corpora harness-seeded.
 
-### C10 · 4n6mount — `fuzz/corpus/session_deserialize/` (23 MB) · FUZZ
+### C10 · 4n6mount — `fuzz/corpus/session_deserialize/` (23 MB) · FUZZ · **T3** (machine-evolved robustness corpus, no oracle)
 Coverage-guided session-deserialization corpus; no curated seeds.
 
-### C11 · apfs-forensic — `tests/data/apfs_{nxsb_head,container_chain,fstree,content}.bin` · REAL-self ✓
+### C11 · apfs-forensic — `tests/data/apfs_{nxsb_head,container_chain,fstree,content}.bin` · REAL-self ✓ · **T2** (hdiutil-minted; libfsapfs/TSK/macOS oracles)
 Real APFS container partitions minted by Apple's own `hdiutil` (`hdiutil create -size {64,128}m
 -fs APFS -volname APFSORACLE -layout GPTSPUD`), carved with `dd … bs=4096` from the attached
 `/dev/diskNs1` (Apple_APFS slice), so every on-disk structure incl. the stored Fletcher-64
@@ -710,7 +728,7 @@ checksums is Apple-authored.
 Generators (verbatim) + captured oracle output in `apfs-forensic/tests/data/README.md`; consumed by
 `apfs-forensic/core/tests/{object,container,checkpoint,container_open,omap,btree,btree_descend,volume_resolve,volume,fsrecord,inode,dir,extent,compression,xattr}.rs`.
 
-### C12 · btrfs-forensic — `tests/data/btrfs_superblock.bin` (4 KiB, committed) + gitignored 512 MiB image · REAL-self ✓
+### C12 · btrfs-forensic — `tests/data/btrfs_superblock.bin` (4 KiB, committed) + gitignored 512 MiB image · REAL-self ✓ · **T2** (mkfs.btrfs-minted, `btrfs inspect-internal dump-super` oracle)
 btrfs P0 superblock fixture minted on Parallels "Ubuntu 24.04 (with Rosetta)" (`btrfs-progs v6.6.3`):
 `dd if=/dev/zero of=btrfs.img bs=1M count=512`; `mkfs.btrfs -f -L BTRFS_ORACLE --csum crc32c btrfs.img`;
 loop-mounted and populated with 3 known files (`small.txt`, `mid.bin` 64 KiB, `dir/sub/leaf.txt`),
@@ -735,7 +753,7 @@ Generators (verbatim) + dump-super ground truth in `btrfs-forensic/tests/data/RE
 
 ## D. Log / memory / application-artifact corpora
 
-### D1 · winevt-forensic — `tests/data/` (1.4 GB) · REAL-ext + VENDORED ✓
+### D1 · winevt-forensic — `tests/data/` (1.4 GB) · REAL-ext + VENDORED ✓ · **T1**
 - **CyberDefenders "CorporateSecrets" Lab** — `…/evtx/*.evtx` (~101 real Windows EVTX channels).
   cyberdefenders.org (educational license).
 - **Fox-IT DanderSpritz** — `fox-it-danderspritz/pre-Security.evtx` (+ pair). Publicly published;
@@ -744,30 +762,30 @@ Generators (verbatim) + dump-super ground truth in `btrfs-forensic/tests/data/RE
 - **VENDORED attack samples:** `EVTX-ATTACK-SAMPLES` (markbaggett, ~278), Hayabusa
   (Yamato-Security, ~292), MITRE samples, DFIRArtifactMuseum. Attribution required on derivatives.
 
-### D2 · srum-forensic — `tests/data/` (16 MB) · REAL ~
+### D2 · srum-forensic — `tests/data/` (16 MB) · REAL ~ · **T1** (real SRUDB.dat; provenance undocumented)
 `SRUDB.dat` ESE database sample(s) for the SRUM parser. Source not explicitly documented — confirm
 before redistribution.
 
-### D3 · memory-forensic — `tests/data/` (24 KB) · SYNTHETIC ✓
+### D3 · memory-forensic — `tests/data/` (24 KB) · SYNTHETIC ✓ · **T3** (small self-authored structures, no oracle)
 Small synthetic structures only. **The large memory CTFs (Cridex, TOTAL_RECALL, CyberSpace,
 DeepDive) physically live in `issen/tests/data` (A6), not here** — referenced cross-repo.
 
-### D4 · brave-browser-sessions (snss-core) — `crates/snss-core/tests/fixtures` (4.3 MB) · REAL-self ✓
+### D4 · brave-browser-sessions (snss-core) — `crates/snss-core/tests/fixtures` (4.3 MB) · REAL-self ✓ · **T1** (genuine SNSS browsing state)
 Real Chromium/Brave SNSS session-restore snapshots (3). Contain real browsing state — sanitize
 before external sharing.
 
-### D5 · chat4n6 — plugin `tests/fixtures` · SYNTHETIC ~ / UNDETERMINED ?
+### D5 · chat4n6 — plugin `tests/fixtures` · SYNTHETIC ~ / UNDETERMINED ? · **T3** (synthetic schema DDL, no oracle)
 WhatsApp/Telegram/Signal/iOS SQLite **schema DDL** fixtures (synthetic schemas). Some android/social
 fixture dirs present but contents not enumerable — undetermined.
 
-### D6 · ufed — `ufed/tests/data` (1 MB) · SYNTHETIC ✓
+### D6 · ufed — `ufed/tests/data` (1 MB) · SYNTHETIC ✓ · **T3** (deterministic PRNG corpus, no oracle)
 Deterministic xorshift-PRNG corpus (regenerable from seed `0xDEADBEEF`).
 
-### D7 · RapidCollect — `crates/*/tests/fixtures` · SYNTHETIC ~ / UNDETERMINED ?
+### D7 · RapidCollect — `crates/*/tests/fixtures` · SYNTHETIC ~ / UNDETERMINED ? · **T3** (synthetic manifest fixture, no oracle)
 Integration-manifest roundtrip fixture (synthetic); android/twitter/instagram fixture dirs
 undetermined.
 
-### D8 · sqlite-forensic text-encoding fixtures — `sqlite-forensic/tests/data/` · REAL-self ✓
+### D8 · sqlite-forensic text-encoding fixtures — `sqlite-forensic/tests/data/` · REAL-self ✓ · **T2** (genuine `sqlite3`-engine output)
 Genuine `sqlite3`-engine output validating per-encoding TEXT decode (header byte 56).
 Generators (the `PRAGMA encoding` must precede any table):
 ```
@@ -779,7 +797,7 @@ MD5: `utf8` 1d0923bb2ad0fee1c6f8cd8140a9ac61 · `utf16le` f2c418e5a1e14ce7f56e28
 `utf16be` 8f260ddb30f34b7de3c9e13a23f7981a. Consumed by `core/tests/utf16_text_tests.rs`
 (skip-if-absent). Header byte 56 = 1/2/3 respectively.
 
-### D9 · peripheral-forensic — `tests/data/` (committed) · SYNTHETIC (spec-exact) ✓
+### D9 · peripheral-forensic — `tests/data/` (committed) · SYNTHETIC (spec-exact) ✓ · **T3** (hand-authored spec-exact logs, no oracle)
 External-device (peripheral) connection forensics. Hand-authored `setupapi.dev.log` / `setupapi.log`
 fixtures matching the Microsoft SetupAPI text-log grammar — NO generator command (spec-exact bytes;
 the build host is macOS and has no real log). Consumed by `forensic/tests/real_data.rs`.
@@ -793,7 +811,7 @@ the build host is macOS and has no real log). Consumed by `forensic/tests/real_d
 - MD5: `setupapi.dev.log` 8e86d3a0c7e5d1209a4d7c81d3b0a023 ·
   `setupapi_xp.log` d1bdd7199b5f134421143ce5dc445474.
 
-### D10 · useract-forensic — `tests/data/real_bash_history` (committed) · REAL-self ✓
+### D10 · useract-forensic — `tests/data/real_bash_history` (committed) · REAL-self ✓ · **T2** (genuine bash history-writer output; ground truth from documented construction)
 User-activity correlation layer (merges `shellhist-core` + `peripheral-core` into one `UserActivity`
 timeline). The one fixture is a genuine `.bash_history` authored by the `bash` shell's own history
 writer (`history -s` + `history -w`, `HISTTIMEFORMAT` set so bash emits `#<epoch>` lines), with a
@@ -804,7 +822,7 @@ generator command in
 - MD5: `real_bash_history` 2a4ead0e64d175c7414bb37f23dbed73 (epoch values differ per run; structure
   fixed).
 
-### D11 · lnk-forensic — `tests/data/` (committed) · MIXED: `.lnk` SYNTHETIC (spec-exact) ✓ + Jump Lists REAL-ext ✓
+### D11 · lnk-forensic — `tests/data/` (committed) · MIXED: `.lnk` SYNTHETIC (spec-exact) ✓ + Jump Lists REAL-ext ✓ · **T1** (real captured Jump Lists; mixed: also T3 — spec-exact `.lnk`)
 Windows Shell Link (`.lnk`) + Jump List forensics. The three `.lnk` fixtures are hand-authored
 (the build host is macOS and cannot author a real `.lnk`); full per-file detail + the generators in
 [`lnk-forensic/tests/data/README.md`](https://github.com/SecurityRonin/lnk-forensic/blob/main/tests/data/README.md).
@@ -859,7 +877,7 @@ DFIR Madness "Stolen Szechuan Sauce" DC01 image (provenance below; per-file deta
 - `blazehash/tests/data/nps-2010-emails.E01` (508 KB) · REAL-ext — NIST/NPS **nps-2010-emails**
   reference corpus (Garfinkel real-data corpus; public).
 
-### E1 · Real-artifact / independent-oracle test fixtures (fleet `*-forensic` crates) · REAL-ext ✓
+### E1 · Real-artifact / independent-oracle test fixtures (fleet `*-forensic` crates) · REAL-ext ✓ · **T1**
 
 Genuine artifacts carved from published corpora, each validated in its crate's
 real-data test against an **independent** tool (not the crate under test). Per-file
