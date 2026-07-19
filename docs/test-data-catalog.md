@@ -157,8 +157,13 @@ E01); the DC01 `SYSTEM` hive (§A3b) is consumed by `forensicnomicon`'s
 `tests/services_dc01_isolation.rs` (env-gated on `ISSEN_DC01_SYSTEM_HIVE`) to
 prove its known-good service-binary catalog isolates the `coreupdater.exe`
 service masquerade (453 services → 7-entry System32-root OwnProcess gate set →
-`coreupdater.exe` the lone uncatalogued one). Redistribution: dfirmadness.com —
-educational/research.
+`coreupdater.exe` the lone uncatalogued one). `case001-pcap.zip` is also the reference archive for
+**4n6mount**'s on-demand archive-read e2e (`tests/e2e_archive_read.rs`, env-gated on
+`FN_E2E_ARCHIVE_ZIP`): it reads the `.zip` through the mount's own `archive_core::Archive` reader,
+picks the member at the 66% position, and asserts its content magic matches its extension —
+`FN_E2E_ARCHIVE_ZIP=<path>/case001-pcap.zip cargo test --test e2e_archive_read -- --nocapture`
+verifies `case001.pcap` (197,583,252 bytes, pcapng magic `0a 0d 0d 0a`). Redistribution:
+dfirmadness.com — educational/research.
 
 > **Reference assets & on-demand extractions.** The committed permanent data is the 11 raw zips only.
 > The published answer-key + writeup HTML lives in the clean subdir `szechuan-sauce-writeups/`
