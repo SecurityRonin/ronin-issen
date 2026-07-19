@@ -717,6 +717,37 @@ every fleet repo inherits them and rotation is one update:
   crates.io / Homebrew / winget / Cloudsmith. A release with *just* the executables works with zero
   external secrets.
 
+### Windows code signing — Authenticode under Security Ronin Ltd (UK)
+
+Fleet Windows binaries (`.exe`, and the Profile-B `.msi`) are **Authenticode-signed under
+Security Ronin Ltd (the UK company)** via **Azure Trusted Signing / Artifact Signing**, so
+Windows/**SmartScreen** show a *verified publisher* and winget installs don't warn — and because
+it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
+
+| Field | Value |
+|---|---|
+| Trusted Signing account | `securityronin` — region **North Europe** → endpoint `https://neu.codesigning.azure.net` |
+| Certificate profile | `securityronin-public` (**Public Trust**) |
+| Validated identity | **Security Ronin Ltd** (UK), D&B / DUNS-verified |
+| Azure subscription | UK / GBP, **PAYG**; tenant identity `info@securityronin.com` (fresh UK-born identity — see below) |
+| CI auth | Entra app + **OIDC** federated credential, role `Artifact Signing Certificate Profile Signer`; org secrets `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` (non-sensitive IDs — OIDC, no client secret) |
+
+- **Sign under the UK entity ONLY.** HK (**Scarlet Monkey Ltd**) is **ineligible for Public
+  Trust** (Azure Artifact Signing serves US/CA/EU/UK orgs only) — never sign fleet binaries under
+  it. The publisher on every signed binary reads **"Security Ronin Ltd"**.
+- **Country is fixed at an identity's first Azure signup and is irreversible** — `albert@` is
+  HK-locked forever, so the UK account was created with a **fresh identity** (`info@`, no prior
+  Azure) that could select United Kingdom. Reuse `info@` for anything UK-Azure; never retry under
+  an HK-tainted identity.
+- Add `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` as **SecurityRonin org secrets** (same model + shadowing
+  rule as the four distribution secrets above).
+- **Mechanics — the `release.yml` signing job, the one-time Azure setup, and the lived gotchas**
+  (region eligibility, `Artifact Signing …` role names, PAYG-to-sign, region-specific endpoint,
+  legal-name match on validation, WAF'd verify-email link) live in the **release skill**
+  (`~/.claude/skills/release.md` §"Windows Authenticode signing"). Law + values here; how-to there.
+- **Migration debt:** current Profile-A CLIs ship the Windows `.zip` **unsigned** — wire the signing
+  step into each app/CLI `release.yml`.
+
 ### Gotchas that fail — or silently skip — despite a green-looking run
 
 1. **`rust-toolchain.toml` pin overrides the cross-build → `error[E0463]: can't find crate for core`.**
