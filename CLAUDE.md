@@ -534,7 +534,7 @@ Full rules live in the global `~/.claude/CLAUDE.personal.md` ("SecurityRonin Rep
 
 ## Test Corpus Catalog — keep it current (MANDATORY)
 
-`issen/docs/corpus-catalog.md` is the **single fleet-wide catalog** of all forensic test data —
+`ronin-issen/docs/corpus-catalog.md` is the **single fleet-wide catalog** of all forensic test data —
 real datasets (what + source + hotlinked download URL + MD5) and synthetic fixtures (the **exact
 command line(s)** that produce them). Because `tests/data/` is gitignored, this catalog is the only
 committed record others can use to reproduce the corpus.
