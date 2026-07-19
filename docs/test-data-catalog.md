@@ -160,13 +160,14 @@ service masquerade (453 services → 7-entry System32-root OwnProcess gate set �
 `coreupdater.exe` the lone uncatalogued one). Redistribution: dfirmadness.com —
 educational/research.
 
-> **Derived / reference assets (subdirectories of the A3 folder).** Extracted and reference material
-> lives in named subdirectories of `dfirmadness-szechuan-sauce/`, beside the raw zips:
-> `extracted/szechuan-sauce-hives/` (§A3b, code-referenced by ~10 parser tests) and
-> `szechuan-sauce-writeups/` (the published answer-key + writeup HTML, reference-only). The folder and
-> every path under it are clean — lowercase, hyphenated, no spaces/quotes/em-dashes — so they are safe
-> inside Rust `include!`/`Path::new` literals and shell. Per-file MD5 manifest (all 11 files):
-> `issen/tests/data/README.md` → `dfirmadness-szechuan-sauce/`; this catalog is the cross-reference.
+> **Reference assets & on-demand extractions.** The committed permanent data is the 11 raw zips only.
+> The published answer-key + writeup HTML lives in the clean subdir `szechuan-sauce-writeups/`
+> (reference-only). Registry hives and E01 segments are **not persisted under `~/src`** — extract them
+> on demand to `/tmp` (hives per §A3b, regenerable from `DC01-ProtectedFiles.zip`; the disk image by
+> unzipping `DC01-E01.zip`/`DESKTOP-E01.zip`). Consuming tests point at the `/tmp` path and skip when
+> absent. All paths are clean (no spaces/quotes/em-dashes), safe in Rust `include!`/`Path::new`
+> literals and shell. Per-file MD5 manifest (all 11 files): `issen/tests/data/README.md` →
+> `dfirmadness-szechuan-sauce/`; this catalog is the cross-reference.
 
 #### A3b · Registry hives extracted from `DC01-ProtectedFiles.zip` (loose, gitignored) · REAL-ext ✓ · **T1**
 
@@ -177,11 +178,11 @@ which skip cleanly when absent). **NO download — extract from A3's `DC01-Prote
 ```sh
 cd tests/data/dfirmadness-szechuan-sauce
 unzip -o -j DC01-ProtectedFiles.zip Protected/SAM Protected/SECURITY Protected/software \
-  Protected/system Users/Administrator/NTUSER.DAT -d extracted/szechuan-sauce-hives
-cd extracted/szechuan-sauce-hives && mv -f software SOFTWARE && mv -f system SYSTEM
+  Protected/system Users/Administrator/NTUSER.DAT -d /tmp/szechuan-hives
+cd /tmp/szechuan-hives && mv -f software SOFTWARE && mv -f system SYSTEM
 ```
 
-Yields `tests/data/dfirmadness-szechuan-sauce/extracted/szechuan-sauce-hives/{SAM,SECURITY,SOFTWARE,SYSTEM,NTUSER.DAT}` (all `regf`). MD5s:
+Yields `/tmp/szechuan-hives/{SAM,SECURITY,SOFTWARE,SYSTEM,NTUSER.DAT}` (all `regf`; ephemeral — re-extract per session, not persisted under `~/src`). MD5s:
 
 | Hive | Bytes | MD5 |
 |---|---|---|
