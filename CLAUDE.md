@@ -439,10 +439,22 @@ that isn't compiled in is a capability that isn't there when it matters. So:
   Same for a heavy transitive: address it in `deny.toml`/`Cargo.lock`, never by amputating
   capability. (A genuine pre-release in the graph — e.g. `ml-dsa 0.1.0-rc.8` — is publish
   hygiene: pin it, don't slim around it.)
-- **Commit `Cargo.lock` in every binary/app repo** so CI resolves the same batteries-included
-  graph the analyst ships, instead of a fresh resolution that can pull a broken or
-  license-tainted version. (This is what actually bit 4n6mount: no committed lock → fresh
-  resolution → CI red, mis-diagnosed as a blazehash compile bug — blazehash compiles fine.)
+- **Commit `Cargo.lock` in EVERY fleet repo — binary AND library (binding).** For binaries/apps
+  it pins the batteries-included graph the analyst ships (a fresh resolution can pull a broken or
+  license-tainted version — this bit 4n6mount: no committed lock → fresh resolution → CI red,
+  mis-diagnosed as a blazehash compile bug — blazehash compiles fine). For **libraries the reason is
+  cargo-vet stability**: a repo whose CI runs `cargo vet --locked` but does NOT commit its lock makes
+  CI *fresh-resolve the latest of every dep on every run*, so the moment any transitive dep publishes
+  a new version (serde_json 1.0.150→1.0.151, serde 1.0.229, forensicnomicon 1.8.1, …) the version-
+  pinned exemptions go stale and vet turns red — the "freshness treadmill" (`cargo vet` passes locally
+  off an older cached lock while CI fails, the most confusing form). Committing the lock makes CI honor
+  the pinned graph, so exemptions stay valid until the lock is *deliberately* bumped, and **Renovate
+  `lockFileMaintenance` bumps it in a controlled PR** (where the exemption/audit regen happens once,
+  reviewed, not on every push). This inverts the old "libraries don't commit Cargo.lock" convention —
+  and it's fine, because a consumer still ignores a dependency library's lock; committing it only
+  governs *that library's own CI/dev*. Companion vet gotcha: the `vet` CI job needs a `cargo fetch`
+  step before `cargo vet --locked` (without a committed lock `cargo metadata --locked` cannot create
+  the lock it needs — "cannot create the lock file"); with the lock committed this is moot but keep it.
 - **Lean library core, full binary (the preferred mechanism — binding).** When a capability
   crate is both a heavy end-user tool AND something other fleet *libraries* link for one
   primitive, split it the way the fleet splits readers: a lean `<x>-core` library carrying just
