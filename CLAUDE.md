@@ -749,7 +749,7 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
 | Certificate profile | `securityronin-public` (**Public Trust**) |
 | Validated identity | **Security Ronin Ltd** (UK), D&B / DUNS-verified |
 | Azure subscription | UK / GBP, **PAYG**; tenant identity `info@securityronin.com` (fresh UK-born identity — see below) |
-| CI auth | Entra app `securityronin-ci-signing` + **OIDC** federated credential (subject `…:environment:release`), role `Artifact Signing Certificate Profile Signer`; secrets `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_SUBSCRIPTION_ID` (non-sensitive IDs — OIDC, no client secret). CI **must run `azure/login` before the signer** (the action's DefaultAzureCredential doesn't do the OIDC exchange itself) — see release skill. |
+| CI auth | Entra app `securityronin-ci-signing` + **OIDC** federated credential (subject `…:environment:release`), role `Artifact Signing Certificate Profile Signer`; secrets `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_SUBSCRIPTION_ID` (non-sensitive IDs — OIDC, no client secret). CI **must run `azure/login` before the signer** (the action's DefaultAzureCredential doesn't do the OIDC exchange itself) — see [`docs/release-sop.md`](docs/release-sop.md) §5. |
 
 - **Sign under the UK entity ONLY.** HK (**Scarlet Monkey Ltd**) is **ineligible for Public
   Trust** (Azure Artifact Signing serves US/CA/EU/UK orgs only) — never sign fleet binaries under
@@ -760,12 +760,12 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
   an HK-tainted identity.
 - Add `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` as **SecurityRonin org secrets** (same model + shadowing
   rule as the four distribution secrets above).
-- **Per-repo onboarding SOP — [`docs/windows-code-signing-sop.md`](docs/windows-code-signing-sop.md)**
-  (fleet-owned, canonical): create the repo's federated credential, wire the two `release.yml` steps
-  (`azure/login` → `trusted-signing-action`), verify. It carries the one-time Azure resources + every
-  lived gotcha (azure/login-first, `Artifact Signing …` role names, region-specific endpoint,
-  PAYG-to-sign, legal-name match, WAF'd verify link). The general release how-to is also in the
-  release skill (`~/.claude/skills/release.md`). **Law + values here; procedure in the SOP.**
+- **Per-repo onboarding procedure — [`docs/release-sop.md`](docs/release-sop.md) §5 "Windows code
+  signing"** (fleet-owned, self-contained): create the repo's federated credential, wire the two
+  `release.yml` steps (`azure/login` → `trusted-signing-action`), verify. §5 carries the one-time
+  Azure resources + every lived gotcha (azure/login-first, `Artifact Signing …` role names,
+  region-specific endpoint, PAYG-to-sign, legal-name match, WAF'd verify link). **Law + values here;
+  full runbook in the SOP.**
 - **Migration debt:** current Profile-A CLIs ship the Windows `.zip` **unsigned** — wire the signing
   step into each app/CLI `release.yml`.
 
@@ -799,7 +799,7 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
    gap hid until 0.4.0 (release fully green, crates.io stuck at 0.3.0). **Audit every app/CLI repo:**
    `grep -rn "cargo publish" .github/workflows`; if absent, add a `publish-crate` job `needs: build`
    running `cargo publish --locked` with `CARGO_REGISTRY_TOKEN` (the org secret above — all repos). The
-   general failure mode + job template are in the release skill.
+   general failure mode + job template are in [`docs/release-sop.md`](docs/release-sop.md) §3.
 4. **Non-workspace GUI (`lens`/overlay) crate builds into its OWN `target/` → packaging can't find the
    binary** (bit `timeglyph` 0.4.0). When the GUI crate is `exclude`d from the workspace, `cargo build
    --manifest-path <gui>/Cargo.toml` outputs to `<gui>/target/`, not the root `target/`; the
@@ -820,7 +820,7 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
    set it once from the token in `~/.pypirc` (`gh secret set PYPI_API_TOKEN -R <org>/<repo>`, or org-wide
    like the other release secrets). (OIDC Trusted Publishing — `id-token: write`, no stored secret — is
    the alternative if you'd rather not manage a token; it needs a one-time trusted-publisher
-   registration on pypi.org.) General pattern in the release skill.
+   registration on pypi.org.) General pattern in [`docs/release-sop.md`](docs/release-sop.md) §3.
 
 ### crates.io versioning rule
 
