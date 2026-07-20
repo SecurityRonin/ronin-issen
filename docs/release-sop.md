@@ -143,13 +143,35 @@ Windows/SmartScreen/winget, no Defender friction.
    ```bash
    gh api -X PUT repos/SecurityRonin/<repo>/environments/release
    ```
-2. **Add a federated credential** to the signer app for this repo's environment (one per repo —
-   a classic FIC can't wildcard tag refs, which is why the job gates on `environment: release`):
+2. **Federated credential — for a SecurityRonin repo, already done.** The signer app carries ONE
+   **flexible** federated credential (`securityronin-fleet-release`) whose wildcard subject
+   `repo:SecurityRonin/*:environment:release` covers **every** SecurityRonin repo's `release`
+   environment, present and future. So onboarding a new SecurityRonin repo needs NO per-repo grant —
+   only the `release` env (step 1) + the `release.yml` wiring (step 4). *(2026-07-21: this supersedes
+   the old "one classic FIC per repo" — a **classic** FIC can't wildcard, but a **flexible** one can.)*
+
+   The wildcard is a **one-time fleet setup** (already created). To recreate/inspect it: the
+   high-level `az ad app federated-credential create` does NOT expose `claimsMatchingExpression`
+   (it errors `Property 'subject' cannot be empty`), so POST raw Graph **beta** against the app's
+   **OBJECT id** `3725e70d-9940-4581-9b7b-2f6dd59af171` (NOT the appId `1381bf9d-…`):
+   ```bash
+   cat > /tmp/fic.json <<'JSON'
+   { "name":"securityronin-fleet-release",
+     "issuer":"https://token.actions.githubusercontent.com",
+     "audiences":["api://AzureADTokenExchange"],
+     "claimsMatchingExpression":{ "value":"claims['sub'] matches 'repo:SecurityRonin/*:environment:release'", "languageVersion":1 } }
+   JSON
+   az rest --method POST \
+     --url "https://graph.microsoft.com/beta/applications/3725e70d-9940-4581-9b7b-2f6dd59af171/federatedIdentityCredentials" \
+     --headers "Content-Type=application/json" --body @/tmp/fic.json
+   ```
+   A repo **outside** SecurityRonin (e.g. an `h4x0r/*` project) is NOT covered by the wildcard — it
+   needs its own **classic** FIC AND the `AZURE_*` secrets present on that repo:
    ```bash
    az ad app federated-credential create --id 1381bf9d-c6b2-4f17-becd-0fb83083b90d --parameters '{
      "name":"<repo>-release-env",
      "issuer":"https://token.actions.githubusercontent.com",
-     "subject":"repo:SecurityRonin/<repo>:environment:release",
+     "subject":"repo:<owner>/<repo>:environment:release",
      "audiences":["api://AzureADTokenExchange"]
    }'
    ```
@@ -190,6 +212,9 @@ Windows/SmartScreen/winget, no Defender friction.
   perform the GitHub-OIDC exchange; without it → `AzureCliCredential: Please run 'az login'` (a
   missing *step*, not a local mistake). *(timeglyph 0.7.1, 2026-07-20)*
 - **Endpoint is region-specific** — `neu` (North Europe). Wrong endpoint = a confusing auth failure.
+- **The wildcard flexible-FIC is invisible to the v1.0 API** — `az ad app federated-credential list`
+  (v1.0 Graph) shows its `subject`/expr as `None`; that does NOT mean it's broken. Inspect via beta:
+  `az rest --method GET --url ".../beta/applications/3725e70d-…/federatedIdentityCredentials/<id>"`.
 - **RBAC role names are `Artifact Signing …`**, NOT "Trusted Signing …" (rebrand):
   `az role definition list --query "[?contains(roleName,'Signing')].roleName"`.
 - **New-resource RBAC propagation lags ~1–2 min** (a role assignment right after ARM deploy 404s).
