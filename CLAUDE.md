@@ -676,6 +676,13 @@ all published via one release PR.
   publish fires a binary build. `v[0-9]*` requires a digit right after `v`, which a `<name>-v…` tag never
   has (a crate name's first char is a letter), so bare `vX.Y.Z` tags match and per-crate tags don't. Fix
   any existing `release.yml` still on `v*` (the `blazehash`/`disk-forensic` reference workflows too).
+- **The complementary control: set `git_tag_name = "{{ package }}-v{{ version }}"` in `release-plz.toml`.**
+  Without it, release-plz's *default* tag for a single-crate workspace is the bare `v{{ version }}`, which
+  **collides with the binary `v[0-9]*` tags** — release-plz then sees a manually-pushed `v0.7.1` and dies
+  `local package … has a greater version (0.7.1) … but the git tag v0.7.1 exists` (bit timeglyph 0.7.1,
+  2026-07-20). The `{{ package }}-v` prefix is what actually makes the "release-plz cuts `<crate>-vX.Y.Z`"
+  assumption above hold. **Both controls are required**: `git_tag_name` (release-plz side) *and* the
+  `v[0-9]*` trigger (release.yml side) — audit every dual release-plz + tag-release repo for the pair.
 - **Verify the publish landed** on crates.io (independent oracle — the crates.io JSON API needs a
   `User-Agent`), never from a green run alone.
 
