@@ -748,10 +748,12 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
   an HK-tainted identity.
 - Add `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` as **SecurityRonin org secrets** (same model + shadowing
   rule as the four distribution secrets above).
-- **Mechanics — the `release.yml` signing job, the one-time Azure setup, and the lived gotchas**
-  (region eligibility, `Artifact Signing …` role names, PAYG-to-sign, region-specific endpoint,
-  legal-name match on validation, WAF'd verify-email link) live in the **release skill**
-  (`~/.claude/skills/release.md` §"Windows Authenticode signing"). Law + values here; how-to there.
+- **Per-repo onboarding SOP — [`docs/windows-code-signing-sop.md`](docs/windows-code-signing-sop.md)**
+  (fleet-owned, canonical): create the repo's federated credential, wire the two `release.yml` steps
+  (`azure/login` → `trusted-signing-action`), verify. It carries the one-time Azure resources + every
+  lived gotcha (azure/login-first, `Artifact Signing …` role names, region-specific endpoint,
+  PAYG-to-sign, legal-name match, WAF'd verify link). The general release how-to is also in the
+  release skill (`~/.claude/skills/release.md`). **Law + values here; procedure in the SOP.**
 - **Migration debt:** current Profile-A CLIs ship the Windows `.zip` **unsigned** — wire the signing
   step into each app/CLI `release.yml`.
 
