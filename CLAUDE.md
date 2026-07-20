@@ -730,7 +730,7 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
 | Certificate profile | `securityronin-public` (**Public Trust**) |
 | Validated identity | **Security Ronin Ltd** (UK), D&B / DUNS-verified |
 | Azure subscription | UK / GBP, **PAYG**; tenant identity `info@securityronin.com` (fresh UK-born identity — see below) |
-| CI auth | Entra app + **OIDC** federated credential, role `Artifact Signing Certificate Profile Signer`; org secrets `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` (non-sensitive IDs — OIDC, no client secret) |
+| CI auth | Entra app `securityronin-ci-signing` + **OIDC** federated credential (subject `…:environment:release`), role `Artifact Signing Certificate Profile Signer`; secrets `AZURE_TENANT_ID` + `AZURE_CLIENT_ID` + `AZURE_SUBSCRIPTION_ID` (non-sensitive IDs — OIDC, no client secret). CI **must run `azure/login` before the signer** (the action's DefaultAzureCredential doesn't do the OIDC exchange itself) — see release skill. |
 
 - **Sign under the UK entity ONLY.** HK (**Scarlet Monkey Ltd**) is **ineligible for Public
   Trust** (Azure Artifact Signing serves US/CA/EU/UK orgs only) — never sign fleet binaries under
