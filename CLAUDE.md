@@ -703,6 +703,7 @@ all published via one release PR.
 A single annotated, signed tag (`git tag -s vX.Y.Z && git push origin vX.Y.Z`) triggers
 `release.yml`, which produces **all** of:
 - **Standalone executables for macOS (aarch64 + x86_64), Linux (aarch64 + x86_64, musl-static), and Windows (x86_64 MSI)** — attached to a GitHub Release with a `checksums.txt`.
+  - **GUI apps** (a repo shipping a windowed binary — e.g. timeglyph's `timeglyph-lens` overlay): the Windows **MSI must install the GUI binary AND create a Start Menu shortcut**. A portable winget **zip** gives the CLI a PATH alias but **no launcher**, so the GUI ends up *"nowhere to be found"* (lived case: winget installed only `timeglyph.exe`, never the lens). Two binaries from two crates + the ICE-clean shortcut pattern (HKCU keypath in a ProgramMenuFolder subfolder; never `light -sval`) are in the **release skill → gotcha #7 (GUI-app MSI)**. macOS/Linux ship the GUI as the **Homebrew/apt binary** — the fleet does **not** build DMGs (the release-skill DMG recipe is a generic template, not our standard). A macOS `.app`/Launchpad launcher is the open analogue of the Windows shortcut — pursue only if asked.
 - **crates.io** publish (`crate` job).
 - **Homebrew** formula bump (dispatch → shared tap).
 - **apt/.deb** for amd64 + arm64, uploaded to the Release **and** pushed to Cloudsmith (`apt` repo).
