@@ -151,9 +151,11 @@ Each entry instantiates a Part A concept; the up-links show which.
 
 ## B1. The recovery flags
 
-The fleet-wide recovery taxonomy. **Authority: the fleet carving ADR** (`docs/decisions/`
-— the decision + rationale, incl. why `--unallocated` over `--deleted`/`--non-live` and
-the tombstone reconciliation). This table is the *definition*; the ADR is the *record*.
+The fleet-wide recovery taxonomy. **Authority: fleet ADR 0001**
+([`decisions/0001-fleet-carving-flags-sweep-engine-contract.md`](decisions/0001-fleet-carving-flags-sweep-engine-contract.md))
+— the decision + rationale (why `--unallocated` over `--deleted`/`--non-live`, the
+tombstone reconciliation, the sweep engine + contract). This table is the *definition*;
+the ADR is the *record*.
 Instantiates → [A3](#a3-data-states--the-vocabulary-of-recovery),
 [A4](#a4-carving--the-tier-test-medium-universal).
 
@@ -243,6 +245,7 @@ technical attribution only** — it links an artifact to a device/account/sessio
 a *person*. The fleet stamps and labels it as such; it never promotes it up the identity
 ladder.
 
-*(The exact provenance type and its crate home are being settled in the fleet carving ADR;
-a `RecoveryMethod` enum already exists in `browser-forensic-carve` — the fleet vocabulary
-must subsume it, not fork a second type.)*
+The provenance type is `forensic_carve::RecoveryMethod { Tombstone, FileInternalCarve,
+UnallocatedCarve, MemoryCarve }` (fleet ADR 0001 §3). The pre-existing
+`browser-forensic-carve::RecoveryMethod` is renamed `SqliteRecoveryMethod` — a
+record-substrate detail *under* `FileInternalCarve`, not a second fleet-level type.
