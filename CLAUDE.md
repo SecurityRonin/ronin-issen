@@ -6,6 +6,15 @@ Before implementing features, read:
 - `north-star-advisor/ai-context.yml` - Strategic context (start here)
 - `north-star-advisor/docs/INDEX.md` - Documentation hub
 
+## Fleet Glossary
+
+Canonical vocabulary, concepts, and the forensic **epistemology** (observed fact vs
+inference vs conclusion; *name the observable, not the conclusion*; the
+`deleted`/`unallocated`/`residual` recovery taxonomy; carving tiers) live in
+[`docs/glossary.md`](docs/glossary.md) — the term-definitions home. The binding
+*rules* stay in this file and in `docs/decisions/`; the glossary defines and
+cross-references them, never restating law.
+
 ## Multi-Repo Architecture
 
 Issen orchestrates a family of standalone forensic libraries. Each
