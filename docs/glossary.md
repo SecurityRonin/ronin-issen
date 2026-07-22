@@ -23,9 +23,9 @@ whenever a new fleet-wide concept is settled.
 
 The most important distinction in the fleet. Every statement a tool emits — a finding,
 a caption, a UI label, a flag name — sits in exactly one layer. Keep them distinct;
-never let a lower-confidence layer wear the clothes of a higher one. (Binding source:
-`CLAUDE.md` → *Expert Witness Reports — Three Layers of Epistemic Authority* and *Name
-evidence by the state or mechanism actually measured*.)
+never let a lower-confidence layer wear the clothes of a higher one. (This three-layer
+model and the naming corollary below are the fleet's own epistemic doctrine; the
+attribution framework is FACT — §A2. Applied in the flag taxonomy, §B1.)
 
 1. **Observed fact** — what the evidence directly shows. State as a finding. *"an
    `$MFT` record has its `IN_USE` flag cleared"; "these sectors are claimed by no
@@ -122,8 +122,8 @@ labeled as such.
 
 ## A5. Evidence & test-data trust tiers
 
-(Distinct from the *carving* tiers in A4. Binding source: `CLAUDE.md` → *Evidence-Based
-Rigor*.)
+(Distinct from the *carving* tiers in A4 — these grade *who confirms* an empirical
+claim, not how it was recovered.)
 
 - **Tier 1** — an independent third party authored the artifact **and** the answer key,
   or it is real-world data. Gold standard.
