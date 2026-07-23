@@ -1,4 +1,4 @@
-# Fleet reorg move map — REORG.md §3.3 (rev 4, 2026-07-23). Source of truth for
+# Fleet reorg move map — REORG.md §3.3 (rev 5, 2026-07-23). Source of truth for
 # repo → destination. Columns: repo <TAB> category.
 # Destination = ~/src/ronin-issen/components/<category>/<repo>, EXCEPT category
 # "_deprecated" → ~/src/ronin-issen/_deprecated/<repo> (umbrella root, sibling of
@@ -73,8 +73,6 @@ leveldb-forensic	parser
 protobuf-forensic	parser
 ese-forensic	parser
 exec-pe-forensic	parser
-doc4n6	parser
-chat4n6	parser
 bluetooth-forensic	parser
 git-forensic	graph
 state-history-forensic	state-history
