@@ -1,4 +1,4 @@
-# Fleet reorg move map — REORG.md §3.3 (rev 3, 2026-07-19). Source of truth for
+# Fleet reorg move map — REORG.md §3.3 (rev 4, 2026-07-23). Source of truth for
 # repo → destination. Columns: repo <TAB> category.
 # Destination = ~/src/ronin-issen/components/<category>/<repo>, EXCEPT category
 # "_deprecated" → ~/src/ronin-issen/_deprecated/<repo> (umbrella root, sibling of
@@ -90,7 +90,6 @@ xpress-huffman	tooling
 timeglyph	tooling
 blob-decoder	tooling
 forensic-hashdb	tooling
-name-variants	tooling
 shrinkpath	tooling
-tl	_deprecated
+forensic-carve	tooling
 usnjrnl-forensic	_deprecated
