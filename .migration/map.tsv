@@ -1,0 +1,96 @@
+# Fleet reorg move map — REORG.md §3.3 (rev 3, 2026-07-19). Source of truth for
+# repo → destination. Columns: repo <TAB> category.
+# Destination = ~/src/ronin-issen/components/<category>/<repo>, EXCEPT category
+# "_deprecated" → ~/src/ronin-issen/_deprecated/<repo> (umbrella root, sibling of
+# components/). Canonical placements resolve the §0.5 divergences: ewf → container/
+# (live repo), _deprecated at the umbrella ROOT.
+#
+# repo	category
+forensicnomicon	knowledge
+forensic-vfs	knowledge
+jsonguard	knowledge
+safe-read	knowledge
+archive-forensic	archive
+zip-forensic	archive
+dar-forensic	archive
+cfb-forensic	archive
+ewf	container
+ewf-forensic	container
+vhd-forensic	container
+vhdx-forensic	container
+vmdk-forensic	container
+qcow2-forensic	container
+aff4-forensic	container
+dmg-forensic	container
+ad1-forensic	container
+atx-forensic	container
+segb-forensic	container
+livedisk-forensic	container
+mbr-partition-forensic	volume
+gpt-partition-forensic	volume
+apm-partition-forensic	volume
+bitlocker-forensic	encryption
+luks-forensic	encryption
+filevault-forensic	encryption
+veracrypt-forensic	encryption
+dpapi-forensic	encryption
+elephant-diffuser	encryption
+ntfs-forensic	filesystem
+ext4fs-forensic	filesystem
+apfs-forensic	filesystem
+hfsplus-forensic	filesystem
+fat-forensic	filesystem
+xfs-forensic	filesystem
+zfs-forensic	filesystem
+btrfs-forensic	filesystem
+ufs-forensic	filesystem
+refs-forensic	filesystem
+udf-forensic	filesystem
+iso9660-forensic	filesystem
+4n6mount	filesystem
+forensic-vfs-engine	filesystem
+forensic-vfs-mount	filesystem
+memory-forensic	memory
+winevt-forensic	log
+journald-forensic	log
+browser-forensic	parser
+sqlite-forensic	parser
+srum-forensic	parser
+winreg-forensic	parser
+prefetch-forensic	parser
+lnk-forensic	parser
+shellitem	parser
+shimcache-forensic	parser
+amcache-forensic	parser
+bam-forensic	parser
+userassist-forensic	parser
+usb-forensic	parser
+peripheral-forensic	parser
+shellhist-forensic	parser
+trash-forensic	parser
+snss-forensic	parser
+leveldb-forensic	parser
+protobuf-forensic	parser
+ese-forensic	parser
+exec-pe-forensic	parser
+doc4n6	parser
+chat4n6	parser
+bluetooth-forensic	parser
+git-forensic	graph
+state-history-forensic	state-history
+snapshot-forensic	state-history
+vsc-forensic	state-history
+issen	orchestrator
+disk-forensic	orchestrator
+useract-forensic	orchestrator
+blazehash	tooling
+lzo	tooling
+lzvn	tooling
+xpress-huffman	tooling
+timeglyph	tooling
+blob-decoder	tooling
+forensic-hashdb	tooling
+name-variants	tooling
+shrinkpath	tooling
+tl	_deprecated
+usnjrnl-forensic	_deprecated
