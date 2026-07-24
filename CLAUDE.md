@@ -519,6 +519,62 @@ crates.io** like the `<x>4n6` tools — never a webview app crates.io cannot del
   `ui.button(format!("{} Refresh", regular::ARROW_CLOCKWISE))`. **Reference
   implementation: `~/src/nameback` (`nameback-gui`).**
 
+## PRD & ADR Standard — preserve the rationale (every non-internal repo; pre-push gate)
+
+Every non-internal fleet repo must preserve its **rationale** in durable, discoverable docs —
+the *why* behind what shipped, which is otherwise lost the moment the author's context evaporates.
+Two artifacts, gated at **different tiers**, because they answer different questions and carry
+different honesty risks. Scope is **repo-level, not per-crate**: a multi-crate repo gets ONE
+repo-level PRD/design doc and ONE `docs/decisions/` set, never one per member.
+
+**ADRs — gated FLEET-WIDE (every non-internal repo).** Each carries `docs/decisions/NNNN-title.md`
+capturing its **load-bearing decisions**: the reader/analyzer (`core/`+`forensic/`) split,
+dependency direction, `forbid(unsafe)` vs `deny`+bounded-allow, format/offset/endianness choices,
+crate-naming decisions (e.g. the `bluetooth-forensic-core` rename around the crates.io `bluetooth_core`
+collision), the `-core` low-MSRV floor, batteries-included feature calls. ADRs **reverse-write
+honestly**: a decision + its context + consequences genuinely happened and is visible in the code,
+so reconstructing one is real history, not fiction. They are lightweight, additive (one per
+decision), and the convention already exists throughout this file (ADR-0005, ADR-0012, …).
+Reverse-write the key past decisions wherever a `docs/decisions/` dir is missing or empty.
+
+**PRD — gated ONLY for the user-facing PRODUCT tier (~15-20 repos).** A PRD is a *requirements*
+artifact (users, use cases, scope, non-goals, success criteria); it only makes sense where there is
+a genuine **product to have requirements for** — the things an examiner *runs*: the `<x>4n6` CLIs,
+browser-forensic, disk-forensic, issen, the `-gui` tools, MCP servers. Library crates — the things a
+developer *links* (`safe-read`, `forensicnomicon`, the `*-core` readers, KNOWLEDGE leaves, contract
+crates) — do **NOT** get a PRD. Forcing one produces a hollow, reverse-engineered fiction: a "product"
+story that never existed, which directly violates the anti-stale-doc discipline (Plan & Doc Lifecycle) and the global "report
+the current state, not the history of attempts." Instead a library satisfies the "why does this exist"
+requirement with a concise **Purpose & Scope** section (in the README, or a short `docs/DESIGN.md`) —
+a lighter, honest artifact. **Name it honestly:** a reverse-reconstructed intent doc on a library is a
+*design/scope* doc, never a "PRD".
+
+**The product-vs-library line (how to assign the tier):** a repo is **product tier** if it ships a
+binary an examiner runs (a `<x>4n6` CLI, a GUI, an MCP server) OR is a full analyzer suite with a
+user-facing front-end. It is **library tier** if it is only *linked* (container/filesystem readers,
+`*-core` crates, KNOWLEDGE/contract leaves, pure-computation codecs). When a repo is both a library and
+a CLI (e.g. blazehash, sqlite-forensic), it is **product tier** (it has a runnable surface) and gets both
+the PRD and the ADRs.
+
+**Reverse-writing produces REAL artifacts, never stubs.** A stub-to-pass-the-gate is *worse than
+nothing* — a hollow doc "reads as current and misleads" (Plan & Doc Lifecycle). Reverse-writing is
+genuine per-repo research: read the code, README, and git history; state what the tool actually is, who
+uses it, its real scope/non-goals, and the decisions that shaped it. If the honest artifact is thin,
+it is thin *and true*, not padded to look authoritative. This is why the doc gate is content work, not
+a file-existence checkbox.
+
+**Pre-push gate (enforced before every push to GitHub).** Presence is a hard gate, mirrored CI-side so
+it holds on fresh clones:
+- **Every non-internal repo:** `docs/decisions/` exists and holds ≥1 real ADR.
+- **Product-tier repos additionally:** `docs/PRD.md` exists.
+- **Library-tier repos:** a Purpose/Scope section in the README or a `docs/DESIGN.md`.
+Enforcement follows the fleet pre-commit⇄CI-parity pattern: a `.pre-commit` / `pre-push` hook blocks the
+push locally, and a CI `docs-gate` job fails red as the backstop (hooks aren't installed on every clone).
+The gate checks *presence + non-emptiness*, not prose quality — the "real artifact, not stub" bar is a
+review discipline, not something CI can grade. **Internal-only repos are exempt** (the `ronin-issen`
+umbrella itself, throwaway scaffolding); when in doubt, a repo that is published or externally consumed
+is *not* internal and is in scope.
+
 ## README Standard (every forensic repo)
 
 Full rules live in the global `~/.claude/CLAUDE.personal.md` ("SecurityRonin Repository README Standard"); the **pre-push readiness + verify mechanics** (adapt the README from `~/src/blazehash`, set repo About description/topics, enable Pages, confirm footer/docs links resolve) live in the `release` skill (`~/.claude/skills/release.md`). The **forensic-specific** load-bearing points for these crates:
