@@ -544,10 +544,10 @@ browser-forensic, disk-forensic, issen, the `-gui` tools, MCP servers. Library c
 developer *links* (`safe-read`, `forensicnomicon`, the `*-core` readers, KNOWLEDGE leaves, contract
 crates) — do **NOT** get a PRD. Forcing one produces a hollow, reverse-engineered fiction: a "product"
 story that never existed, which directly violates the anti-stale-doc discipline (Plan & Doc Lifecycle) and the global "report
-the current state, not the history of attempts." Instead a library satisfies the "why does this exist"
-requirement with a concise **Purpose & Scope** section (in the README, or a short `docs/DESIGN.md`) —
-a lighter, honest artifact. **Name it honestly:** a reverse-reconstructed intent doc on a library is a
-*design/scope* doc, never a "PRD".
+the current state, not the history of attempts." Instead a library's `docs/PRD.md` is a LIGHTER artifact — a concise **Purpose & Scope** (what it is,
+who links it, scope/non-goals) rather than a full product-requirements doc. **The filename is unified —
+`docs/PRD.md` for every tier (ADR-0003); only the content depth varies.** There is no `docs/DESIGN.md`
+and no README-only intent section — "PRD is PRD, not DESIGN."
 
 **The product-vs-library line (how to assign the tier):** a repo is **product tier** if it ships a
 binary an examiner runs (a `<x>4n6` CLI, a GUI, an MCP server) OR is a full analyzer suite with a
@@ -565,9 +565,10 @@ a file-existence checkbox.
 
 **Pre-push gate (enforced before every push to GitHub).** Presence is a hard gate, mirrored CI-side so
 it holds on fresh clones:
-- **Every non-internal repo:** `docs/decisions/` exists and holds ≥1 real ADR.
-- **Product-tier repos additionally:** `docs/PRD.md` exists.
-- **Library-tier repos:** a Purpose/Scope section in the README or a `docs/DESIGN.md`.
+- **Every non-internal repo:** `docs/decisions/` holds ≥1 real ADR, AND `docs/PRD.md` exists
+  (a full PRD for product tier; a lighter Purpose & Scope — same filename — for library tier; ADR-0003).
+- **Validation evidence** (repos making correctness claims): `docs/validation.md` (canonical name, not
+  `corpus-validation.md`).
 Enforcement follows the fleet pre-commit⇄CI-parity pattern: a `.pre-commit` / `pre-push` hook blocks the
 push locally, and a CI `docs-gate` job fails red as the backstop (hooks aren't installed on every clone).
 The gate checks *presence + non-emptiness*, not prose quality — the "real artifact, not stub" bar is a
@@ -630,7 +631,7 @@ change:**
 - Keep the **§H MD5 manifest** in sync (hash new files; `tests/data/` is gitignored so hashes must
   live in the catalog).
 
-**One repo-root `tests/data/` (MANDATORY layout — workspaces included).** Every repo keeps a *single*
+**One repo-root `tests/data/` (MANDATORY layout — workspaces included; naming rationale in ADR-0004 — the directory is `tests/data/`, "corpus" classifies real datasets *within* it, never the directory).** Every repo keeps a *single*
 `tests/data/` at the repo root, never per-member `<member>/tests/data/` directories. In a Cargo
 workspace each member's integration tests reach the shared fixtures with a **relative `include_bytes!`
 path** — from `<member>/tests/<file>.rs` the repo root is two levels up, so it is symmetric across
