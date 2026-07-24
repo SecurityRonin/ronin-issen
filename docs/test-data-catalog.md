@@ -58,6 +58,7 @@ Entries bundling artifacts of different tiers carry the headline tier plus a `(m
 | Volatility `cridex.vmem` | 38 MB | REAL-ext | Volatility Foundation public sample |
 | LogHub `OpenSSH_2k.log` — real sshd `auth.log` | 220 KB | REAL-ext | logpai/loghub (ISSRE'23) |
 | BitLocker oracle `bdetogo.raw` (`bitlocker-forensic`) | 64 MB | REAL-ext | log2timeline/dfvfs (Apache-2.0) |
+| Lone Wolf 2018 — Win10 `SYSTEM` hive (BTHPORT zero-pairings edge case) | 12 MB hive (carved from 12.9 GB image) | REAL-ext | Digital Corpora / GMU CFRS 780 (T. Moore) |
 | FileVault CoreStorage oracle `fvdetest.qcow2` (`filevault-forensic`) | 16 MB | REAL-ext | log2timeline/dfvfs (Apache-2.0) |
 | BitLocker `bitlocker-1.dd` — AES-128-CBC (0x8002) (`bitlocker-forensic`) | 100 MB | REAL-ext | picoCTF 2025 |
 | BitLocker `vault.raw` — XTS-128 (0x8004) (`bitlocker-forensic`) | 2 GB | REAL-ext | BelkaCTF6 (**not redistributable**) |
