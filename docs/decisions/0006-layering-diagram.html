@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issen Fleet — Dependency Layering &amp; Release Order (ADR-0006)</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: #020617; min-height: 100vh; padding: 2rem; color: white; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .header { margin-bottom: 2rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-left: 1.75rem; }
+    .diagram-container { background: rgba(15, 23, 42, 0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 940px; display: block; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 2rem; }
+    .card { background: rgba(15, 23, 42, 0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-dot.cyan { background: #22d3ee; } .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; } .card-dot.amber { background: #fbbf24; } .card-dot.rose { background: #fb7185; }
+    .card h3 { font-size: 0.875rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.75rem; }
+    .card li { margin-bottom: 0.375rem; }
+    .footer { text-align: center; margin-top: 1.5rem; color: #475569; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>Issen Fleet — Dependency Layering &amp; Release Order</h1>
+      </div>
+      <p class="subtitle">ADR-0006 · publish bottom-up (leaves first); depend top-down · a crate publishes after every fleet crate it depends on</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1000 720">
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b" /></marker>
+          <marker id="arrow-rose" markerWidth="12" markerHeight="9" refX="10" refY="4.5" orient="auto"><polygon points="0 0, 12 4.5, 0 9" fill="#fb7185" /></marker>
+          <marker id="arrow-cyan" markerWidth="12" markerHeight="9" refX="10" refY="4.5" orient="auto"><polygon points="0 0, 12 4.5, 0 9" fill="#22d3ee" /></marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+        </defs>
+
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Side flow arrows (drawn behind bands) -->
+        <!-- RELEASE / PUBLISH — bottom-up (points UP) -->
+        <line x1="95" y1="600" x2="95" y2="92" stroke="#fb7185" stroke-width="2.5" marker-end="url(#arrow-rose)"/>
+        <text transform="rotate(-90 66 346)" x="66" y="346" fill="#fb7185" font-size="11" font-weight="700" text-anchor="middle">RELEASE / PUBLISH  ·  bottom-up</text>
+        <!-- DEPENDS ON — top-down (points DOWN) -->
+        <line x1="905" y1="92" x2="905" y2="600" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrow-cyan)"/>
+        <text transform="rotate(90 934 346)" x="934" y="346" fill="#22d3ee" font-size="11" font-weight="700" text-anchor="middle">DEPENDS ON  ·  top-down</text>
+
+        <!-- inter-tier "depends on" arrows (center, pointing down) -->
+        <line x1="500" y1="170" x2="500" y2="186" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="500" y1="278" x2="500" y2="294" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="500" y1="386" x2="500" y2="402" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="500" y1="494" x2="500" y2="510" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+        <!-- ============ TIER 4 — ORCHESTRATION (top) ============ -->
+        <rect x="160" y="80" width="680" height="88" rx="8" fill="#0f172a"/>
+        <rect x="160" y="80" width="680" height="88" rx="8" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="176" y="104" fill="white" font-size="13" font-weight="700">Tier 4 · ORCHESTRATION / apps</text>
+        <text x="176" y="126" fill="#e2e8f0" font-size="10">disk-forensic · memory-forensic · issen · 4n6mount</text>
+        <text x="176" y="146" fill="#fca5b5" font-size="8">wires all five navigation paths · cross-artifact correlation · user-facing CLIs · aggregates every Report</text>
+
+        <!-- ============ TIER 3 — PARSER ============ -->
+        <rect x="160" y="188" width="680" height="88" rx="8" fill="#0f172a"/>
+        <rect x="160" y="188" width="680" height="88" rx="8" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+        <text x="176" y="212" fill="white" font-size="13" font-weight="700">Tier 3 · PARSER &amp; OS-STRUCTURE</text>
+        <text x="176" y="234" fill="#e2e8f0" font-size="10">browser · winevt · srum · winreg · prefetch · lnk · sqlite · segb · git · usb · bam · snss · useract · amcache · shellhist · trash</text>
+        <text x="176" y="252" fill="#e2e8f0" font-size="10">memf-windows · memf-linux  (call parsers on located bytes)</text>
+        <text x="176" y="268" fill="#7dd3fc" font-size="8">interpret artifact records → forensic meaning · accept Path / &amp;[u8] · NEVER import a container/filesystem crate</text>
+
+        <!-- ============ TIER 2 — FILESYSTEM / VFS ============ -->
+        <rect x="160" y="296" width="680" height="88" rx="8" fill="#0f172a"/>
+        <rect x="160" y="296" width="680" height="88" rx="8" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="176" y="320" fill="white" font-size="13" font-weight="700">Tier 2 · VFS &amp; FILESYSTEM / PAGING</text>
+        <text x="176" y="342" fill="#e2e8f0" font-size="10">forensic-vfs · forensic-vfs-engine · ext4fs · ntfs · hfsplus · fat · xfs · ufs · apfs · exfat · memf-hw</text>
+        <text x="176" y="368" fill="#6ee7b7" font-size="8">navigate by path (name→inode→block) or virtual address (PID→EPROCESS→VA→PA)</text>
+
+        <!-- ============ TIER 1 — CONTAINER ============ -->
+        <rect x="160" y="404" width="680" height="88" rx="8" fill="#0f172a"/>
+        <rect x="160" y="404" width="680" height="88" rx="8" fill="rgba(120, 53, 15, 0.35)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="176" y="428" fill="white" font-size="13" font-weight="700">Tier 1 · CONTAINER readers &amp; crypto layers</text>
+        <text x="176" y="450" fill="#e2e8f0" font-size="10">ewf · vmdk · vhdx · qcow2 · aff4 · ad1 · dmg · zip · dar · cfb · archive · iso9660 · udf · livedisk · segb-core · memf-format</text>
+        <text x="176" y="468" fill="#e2e8f0" font-size="10">crypto: dpapi · bitlocker · filevault · veracrypt · vsc</text>
+        <text x="176" y="484" fill="#fcd34d" font-size="8">decode a raw source/dump format → addressable byte stream</text>
+
+        <!-- ============ TIER 0 — KNOWLEDGE (bottom) ============ -->
+        <rect x="160" y="512" width="680" height="88" rx="8" fill="#0f172a"/>
+        <rect x="160" y="512" width="680" height="88" rx="8" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="176" y="536" fill="white" font-size="13" font-weight="700">Tier 0 · KNOWLEDGE leaves &amp; pure codecs  (foundation — zero fleet deps)</text>
+        <text x="176" y="558" fill="#e2e8f0" font-size="10">forensicnomicon · state-history-forensic · safe-read · jsonguard · shellitem · forensic-hashdb · shrinkpath · timeglyph · protobuf</text>
+        <text x="176" y="576" fill="#e2e8f0" font-size="10">codecs: lzo · lzvn · lzfse · xpress-huffman · elephant-diffuser</text>
+        <text x="176" y="592" fill="#c4b5fd" font-size="8">compile-time format specs &amp; constants · shared types/traits · bounds-checked reads (safe-read) · compression/crypto primitives</text>
+
+        <!-- Legend (below all bands) -->
+        <text x="160" y="642" fill="white" font-size="10" font-weight="600">Flow</text>
+        <line x1="200" y1="639" x2="230" y2="639" stroke="#fb7185" stroke-width="2.5" marker-end="url(#arrow-rose)"/>
+        <text x="238" y="642" fill="#94a3b8" font-size="9">release / publish order (bottom-up — a tier fully published before the tier above merges)</text>
+        <line x1="200" y1="659" x2="230" y2="659" stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrow-cyan)"/>
+        <text x="238" y="662" fill="#94a3b8" font-size="9">dependency direction (top-down — each crate depends only on tiers below it)</text>
+        <line x1="480" y1="686" x2="500" y2="686" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <text x="508" y="689" fill="#94a3b8" font-size="9">“depends on” between adjacent tiers</text>
+      </svg>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot rose"></div><h3>Release / publish — bottom-up</h3></div>
+        <ul>
+          <li>• Publish a tier fully before merging any crate in the tier above.</li>
+          <li>• Applies to release-plz PR sweeps, manual <code>cargo publish</code>, and convergence bumps (the memf 0.3.1 / engine 0.1.5 waves).</li>
+          <li>• Caret reqs (<code>^0.2</code>) soften but don't remove the rule — a crate needing the bumped version fails until it lands.</li>
+          <li>• crates.io throttles updates to existing crates — pace large batches ~3 min apart.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot cyan"></div><h3>Dependency — top-down</h3></div>
+        <ul>
+          <li>• Each crate depends only on tiers below it.</li>
+          <li>• PARSER never imports CONTAINER / FILESYSTEM / PAGING — it accepts <code>Path</code> or <code>&amp;[u8]</code>.</li>
+          <li>• CONTAINER depends on KNOWLEDGE only.</li>
+          <li>• Unsure where a crate sits? Read its <code>[dependencies]</code> / <code>cargo tree</code> — it publishes after all of them.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot violet"></div><h3>Why it matters</h3></div>
+        <ul>
+          <li>• Wrong order → the split-graph failure class (E0277/E0308, "failed to select a version").</li>
+          <li>• Bit the fleet 3× this cycle: forensic-vfs 0.7, memf 0.3.1, browser-forensic -storage/-webcache.</li>
+          <li>• Used bottom-up to clear a 44-PR release backlog cleanly.</li>
+          <li>• Companion to ADR-0005 (which crates publish at all) + the release skill (how to cut one).</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">Issen forensic fleet · ADR-0006 · SecurityRonin · within a tier, order by intra-tier deps (&lt;x&gt;-core before &lt;x&gt;-forensic; elephant-diffuser before bitlocker; segb-core → segb-forensic → useract)</p>
+  </div>
+</body>
+</html>

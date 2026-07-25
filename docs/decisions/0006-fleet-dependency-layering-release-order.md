@@ -3,6 +3,9 @@
 Date: 2026-07-25
 Status: Accepted
 
+> **Diagram:** [`0006-layering-diagram.html`](0006-layering-diagram.html) — the five
+> tiers with the release-order (bottom-up) and dependency (top-down) flows.
+
 ## Context
 
 The fleet is ~80 standalone crates wired into a strict dependency DAG (the
