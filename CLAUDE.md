@@ -113,6 +113,11 @@ ORCHESTRATION
                            TimelineEvent/Evidence, user-facing CLI
 ```
 
+**Release/publish order follows this graph bottom-up** — see
+[ADR-0006](docs/decisions/0006-fleet-dependency-layering-release-order.md) for the
+tiered ordering (KNOWLEDGE leaves → containers → filesystems → parsers →
+orchestration) that every cross-fleet publish/bump sweep must follow.
+
 **Dependency rules:**
 - CONTAINER depends on KNOWLEDGE only
 - FILESYSTEM / PAGING / OS STRUCTURE / LOG FORMAT depend on their container + KNOWLEDGE
