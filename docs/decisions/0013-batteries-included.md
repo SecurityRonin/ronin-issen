@@ -82,3 +82,14 @@ that instinct as the fleet default.
   regression.
 - The lean-`-core` / full-binary split (companion to ADR-0008, ADR-0010) is how a low-MSRV library
   floor and a batteries-included binary coexist without feature-juggling one `default`.
+- **Composition / aggregation layers are the capability-carrying tier, never a low-MSRV tier, and
+  deferring a format to protect their MSRV is banned.** `forensic-vfs-engine` (which pulls every
+  reader) and `disk-forensic` (which aggregates every container) must surface **every** supported
+  format from `open`/`open_all`, never a reduced subset, and take whatever MSRV full coverage needs.
+  The low-MSRV floor is preserved **only** in the contract crate (`forensic-vfs`, traits-only) and
+  the lean `*-core` readers — not by dropping a format from the engine. (Lived case: proposing to
+  *defer* AFF4-Logical out of `forensic-vfs-engine` to hold Rust 1.88 was wrong. The right fix kept
+  full coverage **and** minimized MSRV — AFF4-Logical read via the `aff4` crate the engine already
+  has, AD1/DAR via `ad1-core`/`dar-core`, sidestepping the heavy `disk-forensic` tree; the residual
+  1.93 floor comes from `archive-core -> sevenz-rust2` (7z, incl. its 0.21.1 security fix) and is
+  *taken*, not dodged.)
