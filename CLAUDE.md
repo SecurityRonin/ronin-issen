@@ -17,237 +17,41 @@ cross-references them, never restating law.
 
 ## Multi-Repo Architecture
 
-Issen orchestrates a family of standalone forensic libraries. Each
-library is a deep, self-contained expert in one artifact family; Issen
-is the thin wrapping and correlation layer on top.
+Issen orchestrates a family of standalone forensic libraries — each a deep expert in
+one artifact family; Issen is the thin wrapping + correlation layer on top. All
+evidence is reached through **five navigation primitives**, and PARSER crates are
+**medium-agnostic** (they never learn where their bytes came from). The full layer
+map, per-layer responsibilities, the `[H]` state-history functor, and the rationale
+live in **[ADR-0016](docs/decisions/0016-multi-repo-layer-architecture.md)** (release
+order: [ADR-0006](docs/decisions/0006-fleet-dependency-layering-release-order.md);
+reader/analyzer split: [ADR-0008](docs/decisions/0008-reader-analyzer-core-forensic-split.md);
+VFS abstraction: [ADR-0011](docs/decisions/0011-vfs-universal-container-abstraction.md)).
+Canonical vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
-### The Layer Hierarchy
+**Layers** (dependencies flow down toward KNOWLEDGE; a repo may span several):
+KNOWLEDGE (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf,
+vhdx, dd, segb-core, memf-format) → FILESYSTEM (ext4fs-forensic, 4n6mount) / PAGING
+(memf-hw) / OS STRUCTURE (memf-windows) / LOG FORMAT (winevt-forensic) / QUERY ENGINE
+(issen-remote-access, velociraptor-parser) / GRAPH NAV (cas/git/sigstore-forensic) →
+PARSER (browser/winevt/srum/segb-forensic, …) → ORCHESTRATION (Issen).
 
-Layers are architectural concepts; a single repo may contribute crates to
-multiple layers. Repos are noted in brackets.
+**Five navigation primitives:** `[P]` Disk `name→inode→block` · `[M]` Memory
+`PID→EPROCESS→VA→PA` · `[L]` Log `timestamp/record→field` · `[Q]` Live Query
+`(endpoint,query,cursor)→rows` · `[C]` Content-Addressed `hash→blob→graph`. `[H]`
+state-history is a cross-cutting functor lifting each base primitive to a
+time-indexed variant (`TemporalCohort<H>`).
 
-```
-KNOWLEDGE
-  forensicnomicon          zero-dep, compile-time artifact specs, format constants
-  [repo: forensicnomicon]
-  state-history-forensic   zero-dep, [H] functor traits: HistoricalSource,
-                           TemporalCohort<H>, ClockProvenance, ArtifactRef, …
-  [repo: state-history-forensic]
-  jsonguard                output-sanitization utility leaf: RFC-4180 CSV /
-                           formula-injection guard, bidi/control stripping,
-                           serde JsonSafe<'_>; cross-cutting (memf uses it for
-                           safe CLI output) — not a forensic format reader
-  [repo: jsonguard]
+**Dependency rules (load-bearing):** CONTAINER depends on KNOWLEDGE only;
+FILESYSTEM/PAGING/OS-STRUCTURE/LOG depend on their container + KNOWLEDGE; **PARSER
+depends on KNOWLEDGE only and accepts `Path`/`&[u8]` — it never imports a
+CONTAINER/FILESYSTEM/PAGING/OS/LOG crate**; OS STRUCTURE MAY call PARSER when it
+locates artifact bytes in a VA region; ORCHESTRATION is the primary wiring point.
 
-CONTAINER                  decode a raw source format → addressable data stream
-  ewf                      E01/EWF/Ex01 → raw sector stream     [repo: ewf, issen-ewf]
-  vhdx                     VHDX → raw sector stream             [repo: vhdx, issen-vhdx]
-  dd                       raw/dd/img → flat sector stream      [repo: dd, issen-dd]
-  segb-core                Apple SEGB (Biome) container → v1/v2 record stream
-                           (state, timestamps, CRC, protobuf payload);
-                           App.MenuItem field walker  [repo: segb-forensic]
-  [vmdk, qcow2, vhd, iso, aff4, dmg, apfs-container]          [planned]
-  memf-format              memory dumps (WinPMEM, raw,          [repo: memory-forensic]
-                           hiberfil.sys, ELF core) → raw page stream
-  [log containers: EVTX binary, journal binary, tracev3, PCAP, cloud API stream]
-
-  Each path has its own address space and navigation primitive. All five are
-  parallel and independent; none feeds another; all converge at PARSER.
-
-  [P] Persistent Storage        [M] Memory              [L] Log
-    navigate by: path             navigate by: PID        navigate by: timestamp
-    name → inode → block          PID → EPROCESS          or record number
-                                  → VA → PA               seek → boundary → field
-
-    FILESYSTEM                    PAGING                  LOG FORMAT
-      ext4fs-forensic               memf-hw  VA→PA          winevt-forensic  EVTX
-      ntfs-forensic  [planned]      PML4/PAE/AArch64        [repo: winevt-forensic]
-      apfs-forensic  [planned]      [repo: memory-forensic] journal-forensic [plan]
-      4n6mount  FUSE bridge         OS STRUCTURE            tracev3-forensic [plan]
-      [repo: ext4fs-forensic,         memf-windows            zeek-forensic  [plan]
-       4n6mount]                       EPROCESS, VAD           cloudtrail-src [plan]
-                                       DPAPI, DKOM
-                                       memf-linux [planned]
-
-  [Q] Live Query                [C] Content-Addressed
-    navigate by: query            navigate by: hash
-    (endpoint, query, cursor)     hash → blob → content graph
-    → result rows
-
-    QUERY ENGINE                  GRAPH NAVIGATION
-      issen-remote-access           cas-forensic        [planned]
-      velociraptor-parser           git-forensic        [planned]
-      WQL / OSQuery [planned]       sigstore-forensic   [planned]
-
-  Note: a disk path can feed a log or memory path — hiberfil.sys and EVTX files
-  live on disk and are accessed via ext4/NTFS first. Cloud/streaming logs have
-  no disk or memory path upstream — the log path stands alone.
-  [Q] and [C] have no container in the traditional sense: the endpoint or hash
-  store IS the entry point.
-
-  [H] State-History (cross-cutting functor — NOT a vertical tier)
-    [H] lifts each base primitive to a time-indexed variant:
-    [P^H] disk-history     VSS, APFS snapshots, Time Machine, btrfs
-                           [vss-history, apfs-snapshot-history — planned]
-    [M^H] mem-history      hiberfil chain, VMware memory snapshots [planned]
-    [L^H] log-history      journald sealed epochs, rotated logs [planned]
-    [Q^H] query-history    point-in-time osquery exports [planned]
-    [C^H] ≅ [C]            CAS is the fixed point: git already encodes history
-    Shared traits:         state-history-forensic [repo: state-history-forensic]
-
-PARSER                     interpret artifact records → forensic meaning
-  browser-forensic         browser artifact files / SQLite pages → BrowserEvent
-  winevt-forensic          EVTX records → EventRecord  (also in LOG FORMAT above)
-  srum-forensic            ESE page bytes → SrumRecord
-  segb-forensic            SEGB (Biome) records → anomaly Findings
-                           (CRC-mismatch / timestamp-order); over segb-core
-  [registry-forensic, prefetch-forensic, ...]
-  [repo: browser-forensic, winevt-forensic, srum-forensic, segb-forensic, ...]
-
-ORCHESTRATION
-  useract-forensic         user-activity correlation: merges shell-history +
-                           peripheral-device + Biome App.MenuItem events into
-                           one per-user timeline (consumes segb-core)
-  [repo: useract-forensic]
-  Issen              wires all five paths, cross-artifact correlation,
-                           TimelineEvent/Evidence, user-facing CLI
-```
-
-**Release/publish order follows this graph bottom-up** — see
-[ADR-0006](docs/decisions/0006-fleet-dependency-layering-release-order.md) for the
-tiered ordering (KNOWLEDGE leaves → containers → filesystems → parsers →
-orchestration) that every cross-fleet publish/bump sweep must follow.
-
-**Dependency rules:**
-- CONTAINER depends on KNOWLEDGE only
-- FILESYSTEM / PAGING / OS STRUCTURE / LOG FORMAT depend on their container + KNOWLEDGE
-- OS STRUCTURE (memf-windows) MAY call PARSER repos when it locates artifact bytes
-  in a VA region (e.g., SQLite page in hiberfil.sys → browser-forensic-carve)
-- PARSER depends on KNOWLEDGE only; accepts `Path` or `&[u8]` — never imports
-  CONTAINER, FILESYSTEM, PAGING, OS STRUCTURE, or LOG FORMAT crates
-- QUERY ENGINE crates (issen-remote-access, velociraptor-parser) depend on KNOWLEDGE
-  and produce result-row types that feed into PARSER or directly into ORCHESTRATION
-- GRAPH NAVIGATION crates (cas-forensic, git-forensic) depend on KNOWLEDGE and
-  produce CAS event types that feed into PARSER or directly into ORCHESTRATION
-- `[H]` crates depend on state-history-forensic (KNOWLEDGE) plus whichever layer they
-  observe (FILESYSTEM for vss-history, PARSER for wal-history, etc.) — they may depend
-  on any layer below ORCHESTRATION as needed, and export `TemporalCohort<H>` upward
-- ORCHESTRATION is the primary wiring point between all layers
-
-**The five navigation primitives:**
-- [P] Disk: `name → inode → block address` (filesystem tree traversal)
-- [M] Memory: `PID → EPROCESS → virtual address → physical address` (page table walk)
-- [L] Log: `timestamp / record-number → record boundary → field decode` (stream seek)
-- [Q] Live Query: `(endpoint, query, cursor) → result_set → field` (ephemeral; data is produced, not retrieved)
-- [C] Content-Addressed: `hash → blob → content_graph` (Merkle DAG traversal; identity = hash)
-
-**Why PARSER repos have no layer dependency below them:**
-
-```
-Live system      → OS opens Path normally            → browser-forensic(path)
-4n6mount         → FUSE exposes path transparently   → browser-forensic(path)
-ewf + ext4fs     → Issen extracts file bytes         → browser-forensic(bytes)
-memf-windows     → extracts SQLite page from VA      → browser-forensic-carve(bytes)
-winevt-forensic  → decodes EVTX record               → EventRecord
-cloudtrail-src   → streams CloudTrail events          → (future parser)(record)
-velociraptor     → executes VQL query                 → (parser)(result_rows)
-cas-forensic     → resolves hash to blob content      → (parser)(bytes)
-```
-
-PARSER repos are medium-agnostic by design. The wiring to a source happens in
-ORCHESTRATION or inside the OS STRUCTURE / LOG FORMAT / QUERY ENGINE layer that
-located the artifact.
-
-### Layer Responsibilities
-
-**forensicnomicon:**
-- Magic bytes, record markers, format header offsets (ESE page, EVTX chunk, etc.)
-- Field schemas and invariants for application-level formats
-- NO parsing algorithms, NO file I/O, NO binary deserialization
-
-**state-history-forensic:**
-- `HistoricalSource` trait, `TemporalCohort<H>`, `TemporalState<H>` generics
-- `ArtifactRef` + `IdentityClaim` multi-facet identity; `IdentityDiscipline` selector
-- `ClockProvenance` with 4 orthogonal axes (source / trust_grade / tamper_resistance / ordering_only)
-- `EpochTag`, `LsnKind`, `CohortTopology`, `MaterializationSafety`
-- `AcquisitionProtocol` and `StateMaterializer` trait boundaries
-- NO parsing, NO file I/O; zero external deps; pure type/trait definitions
-
-**CONTAINER crates** (ewf, memf-format):
-- Decode the outer container/dump format to expose a raw addressable stream
-- ewf: sector stream from E01 segments, hash verification
-- memf-format: physical page stream from WinPMEM/raw/hiberfil.sys/ELF core
-- Log containers (EVTX binary, journal, tracev3, PCAP) are handled within the
-  LOG FORMAT layer itself — they have no separate "outer container" wrapper
-
-**FILESYSTEM crates** (ext4fs-forensic, ntfs-forensic, apfs-forensic, 4n6mount):
-- Navigate a sector stream by path: name → inode → block addresses → file bytes
-- 4n6mount: FUSE bridge — makes any CONTAINER+FILESYSTEM pair look like a
-  normal OS path, so PARSER repos need no image-format knowledge
-
-**PAGING crate** (memf-hw / currently memf-core):
-- Navigate a page stream by virtual address: PID → EPROCESS → VA → PA
-- OS-agnostic: x86_64 PML4/5-level, PAE, AArch64 page-table walking
-- ObjectReader: symbol-based kernel struct field access
-- Knows nothing about Windows or Linux — pure hardware abstraction
-
-**OS STRUCTURE crates** (memf-windows, memf-linux):
-- Navigate a VA space by OS object: EPROCESS list, VAD tree, DPAPI cache, ETW
-- Calls PARSER repos when known artifact bytes are located; passes `&[u8]`
-
-**LOG FORMAT crates** (winevt-forensic, journal-forensic [planned],
-tracev3-forensic [planned], zeek-forensic [planned], cloudtrail-src [planned]):
-- Navigate a log stream by timestamp or record number: seek → boundary → fields
-- Address space: sequence numbers, timestamps, cursor tokens
-- winevt-forensic: EVTX chunk seek by record ID + BinXML field decode
-- journal-forensic: journal cursor (seqnum + boot-id) → structured entry fields
-- cloudtrail-src: time-range + pagination cursor → JSON event stream
-- Note: winevt-forensic is both a LOG FORMAT layer (navigation) and a PARSER
-  (semantic interpretation of Windows event IDs) — the boundary is internal to
-  the repo: `binary.rs` / chunk walking = LOG FORMAT; `EventRecord` extraction = PARSER
-
-**QUERY ENGINE crates** (issen-remote-access, velociraptor-parser):
-- Execute a query against a live endpoint and stream result rows
-- Navigation primitive: `(endpoint, query, cursor) → result_set → field`
-- The query itself is part of the evidence chain; results are attacker-durable
-- issen-remote-access: dispatches VQL/WQL/SQL to a remote agent
-- velociraptor-parser: decodes Velociraptor collection output into typed rows
-
-**GRAPH NAVIGATION crates** (cas-forensic, git-forensic, sigstore-forensic):
-- Navigate a content-addressed store by hash: hash → blob → content graph
-- Navigation primitive: Merkle DAG traversal — following object references by hash
-- Identity equals hash: globally addressable, immutability guaranteed by construction
-- cas-forensic: abstract CAS interface over git/OCI/IPFS
-- git-forensic: commit/blob/tree graph + provenance chain
-- sigstore-forensic: transparency log entries → artifact signing chain
-
-**PARSER crates** (browser-forensic, winevt-forensic, srum-forensic, …):
-- Accept `Path`, `&[u8]`, or structured log/query records; medium-agnostic
-- `<format>-core`: domain types + format constants
-- `<format>-carve`: free-page/WAL/record recovery, magic-byte scanning
-- `<format>-integrity`: tampering and deletion detection (NOT "antiforensic")
-- `<format>-memory`: pure byte-pattern scanner — no layer dependencies below PARSER
-
-**Issen** (ORCHESTRATION):
-- Thin `issen-<artifact>` wrapping crates
-- Converts parser output into `TimelineEvent` / `Evidence`
-- Wires all five paths into the correlation engine
-- Cross-artifact correlation via `issen-correlation` and `forensic-pivot`
-- User-facing CLI via `issen-cli`
-
-### Practical Decision Rule
-
-1. **"Is this a fact about a format?"** → `forensicnomicon`
-2. **"Does this decode an image/dump container?"** → CONTAINER (`ewf`, `memf-format`)
-3. **"Does this navigate sectors by path (name→inode→block)?"** → FILESYSTEM (`ext4fs-forensic`, `4n6mount`, …)
-4. **"Does this navigate pages by virtual address (PID→EPROCESS→VA→PA)?"** → PAGING (`memf-hw`)
-5. **"Does this walk Windows/Linux kernel objects?"** → OS STRUCTURE (`memf-windows`, `memf-linux`)
-6. **"Does this navigate a log stream by timestamp or record number?"** → LOG FORMAT (`winevt-forensic`, `journal-forensic`, …)
-7. **"Does this interpret artifact records as forensic evidence?"** → PARSER (`browser-forensic`, `winevt-forensic`, `srum-forensic`, …)
-8. **"Does this correlate findings or drive the UX?"** → `Issen`
-9. **"Does this execute a live query against an endpoint and capture the result?"** → QUERY ENGINE (`issen-remote-access`, `velociraptor-parser`)
-10. **"Does this navigate a content-addressed store by hash (Merkle DAG)?"** → GRAPH NAVIGATION (`cas-forensic`, `git-forensic`, `sigstore-forensic`)
-11. **"Does this enumerate the temporal cohort of states for an artifact?"** → `[H]` state-history layer (`vss-history`, `wal-history`, `git-history`, etc.) sharing types from `state-history-forensic`
+**Where does this code go?** format fact → forensicnomicon · decode a container →
+CONTAINER · sectors-by-path → FILESYSTEM · pages-by-VA → PAGING · kernel objects →
+OS STRUCTURE · log-by-time/record → LOG FORMAT · interpret records → PARSER ·
+correlate/UX → Issen · live query → QUERY ENGINE · hash store → GRAPH NAV ·
+temporal cohort → `[H]` state-history. **See [ADR-0016](docs/decisions/0016-multi-repo-layer-architecture.md).**
 
 ## The Reporting Model — `forensicnomicon::report`
 
@@ -279,85 +83,29 @@ Compile every capability in; a capability not compiled in is not there in the fi
 
 ## Fleet GUI Standard — egui (single binary, crates.io-publishable)
 
-A fleet GUI follows the same shippability rule as a CLI: it must be a **pure-Rust,
-single static binary** that `cargo install`s into a working app and **publishes to
-crates.io** like the `<x>4n6` tools — never a webview app crates.io cannot deliver.
-
-- **Framework: `egui` (`eframe`) is the default.** Immediate-mode, pure Rust, single
-  static binary, no runtime deps, cross-platform, and the *same* code compiles to
-  WASM for a browser build. It fits data-dense analyst UIs (super-timeline, event
-  tables, MFT/registry trees, hex). The `-gui` crate then publishes exactly like
-  `-cli`. (`iced`/`slint` are acceptable for a more polished retained-mode app, but
-  egui is the default; the TUI→GUI progression `ratatui`→`egui` keeps the
-  single-binary / `cargo install` / crates.io properties at every rung.)
-- **Banned for fleet GUIs: Tauri / `dioxus-desktop` / any `wry`/webview bundle.**
-  They ship a JS/HTML bundle + a bundler step, so crates.io cannot deliver a working
-  artifact — they are release-installer-distributed, not `cargo install`. If one is
-  *genuinely* required (rich web tech), it carries a documented reason AND
-  `publish = false`, so it never reads as a missing publish (e.g. `srum-gui`).
-- **Icons: `egui-phosphor`** — the ~6000-glyph Phosphor set (egui's built-ins are far
-  too few). Pin it to the egui-matching version (egui 0.29 ↔ egui-phosphor 0.7). Wire
-  once at startup: `egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);`
-  then use glyph constants inline: `use egui_phosphor::regular;` →
-  `ui.button(format!("{} Refresh", regular::ARROW_CLOCKWISE))`. **Reference
-  implementation: `~/src/nameback` (`nameback-gui`).**
+A fleet GUI is a **pure-Rust, single static binary** that `cargo install`s and
+publishes to crates.io like a `<x>4n6` CLI: **`egui`/`eframe` is the default**
+(immediate-mode, one binary, WASM-capable, fits data-dense analyst UIs; `-gui`
+publishes like `-cli`). **Tauri / `dioxus-desktop` / any `wry`/webview bundle are
+banned** (crates.io cannot deliver them) — a genuine exception carries a documented
+reason + `publish = false` (e.g. `srum-gui`). Icons: **`egui-phosphor`**, pinned to
+the egui-matching version. macOS GUI *distribution* follows
+[ADR-0002](docs/decisions/0002-macos-gui-homebrew-cask-signed.md). Reference:
+`~/src/nameback` (`nameback-gui`). **See [ADR-0014](docs/decisions/0014-fleet-gui-standard-egui.md).**
 
 ## PRD & ADR Standard — preserve the rationale (every non-internal repo; pre-push gate)
 
-Every non-internal fleet repo must preserve its **rationale** in durable, discoverable docs —
-the *why* behind what shipped, which is otherwise lost the moment the author's context evaporates.
-Two artifacts, gated at **different tiers**, because they answer different questions and carry
-different honesty risks. Scope is **repo-level, not per-crate**: a multi-crate repo gets ONE
-repo-level PRD/design doc and ONE `docs/decisions/` set, never one per member.
-
-**ADRs — gated FLEET-WIDE (every non-internal repo).** Each carries `docs/decisions/NNNN-title.md`
-capturing its **load-bearing decisions**: the reader/analyzer (`core/`+`forensic/`) split,
-dependency direction, `forbid(unsafe)` vs `deny`+bounded-allow, format/offset/endianness choices,
-crate-naming decisions (e.g. the `bluetooth-forensic-core` rename around the crates.io `bluetooth_core`
-collision), the `-core` low-MSRV floor, batteries-included feature calls. ADRs **reverse-write
-honestly**: a decision + its context + consequences genuinely happened and is visible in the code,
-so reconstructing one is real history, not fiction. They are lightweight, additive (one per
-decision), and the convention already exists throughout this file (ADR-0005, ADR-0012, …).
-Reverse-write the key past decisions wherever a `docs/decisions/` dir is missing or empty.
-
-**PRD — gated ONLY for the user-facing PRODUCT tier (~15-20 repos).** A PRD is a *requirements*
-artifact (users, use cases, scope, non-goals, success criteria); it only makes sense where there is
-a genuine **product to have requirements for** — the things an examiner *runs*: the `<x>4n6` CLIs,
-browser-forensic, disk-forensic, issen, the `-gui` tools, MCP servers. Library crates — the things a
-developer *links* (`safe-read`, `forensicnomicon`, the `*-core` readers, KNOWLEDGE leaves, contract
-crates) — do **NOT** get a PRD. Forcing one produces a hollow, reverse-engineered fiction: a "product"
-story that never existed, which directly violates the anti-stale-doc discipline (Plan & Doc Lifecycle) and the global "report
-the current state, not the history of attempts." Instead a library's `docs/PRD.md` is a LIGHTER artifact — a concise **Purpose & Scope** (what it is,
-who links it, scope/non-goals) rather than a full product-requirements doc. **The filename is unified —
-`docs/PRD.md` for every tier (ADR-0003); only the content depth varies.** There is no `docs/DESIGN.md`
-and no README-only intent section — "PRD is PRD, not DESIGN."
-
-**The product-vs-library line (how to assign the tier):** a repo is **product tier** if it ships a
-binary an examiner runs (a `<x>4n6` CLI, a GUI, an MCP server) OR is a full analyzer suite with a
-user-facing front-end. It is **library tier** if it is only *linked* (container/filesystem readers,
-`*-core` crates, KNOWLEDGE/contract leaves, pure-computation codecs). When a repo is both a library and
-a CLI (e.g. blazehash, sqlite-forensic), it is **product tier** (it has a runnable surface) and gets both
-the PRD and the ADRs.
-
-**Reverse-writing produces REAL artifacts, never stubs.** A stub-to-pass-the-gate is *worse than
-nothing* — a hollow doc "reads as current and misleads" (Plan & Doc Lifecycle). Reverse-writing is
-genuine per-repo research: read the code, README, and git history; state what the tool actually is, who
-uses it, its real scope/non-goals, and the decisions that shaped it. If the honest artifact is thin,
-it is thin *and true*, not padded to look authoritative. This is why the doc gate is content work, not
-a file-existence checkbox.
-
-**Pre-push gate (enforced before every push to GitHub).** Presence is a hard gate, mirrored CI-side so
-it holds on fresh clones:
-- **Every non-internal repo:** `docs/decisions/` holds ≥1 real ADR, AND `docs/PRD.md` exists
-  (a full PRD for product tier; a lighter Purpose & Scope — same filename — for library tier; ADR-0003).
-- **Validation evidence** (repos making correctness claims): `docs/validation.md` (canonical name, not
-  `corpus-validation.md`).
-Enforcement follows the fleet pre-commit⇄CI-parity pattern: a `.pre-commit` / `pre-push` hook blocks the
-push locally, and a CI `docs-gate` job fails red as the backstop (hooks aren't installed on every clone).
-The gate checks *presence + non-emptiness*, not prose quality — the "real artifact, not stub" bar is a
-review discipline, not something CI can grade. **Internal-only repos are exempt** (the `ronin-issen`
-umbrella itself, throwaway scaffolding); when in doubt, a repo that is published or externally consumed
-is *not* internal and is in scope.
+Every non-internal fleet repo preserves its *why* in durable, **repo-level** docs
+(never per-crate). **ADRs are gated fleet-wide** — `docs/decisions/NNNN-title.md`
+capturing load-bearing decisions, reverse-written honestly from the code + git
+history (real artifacts, never stubs). **A PRD is gated only for the user-facing
+PRODUCT tier** — things an examiner *runs* (`<x>4n6` CLIs, GUIs, MCP servers, full
+analyzer suites); a **library** repo instead gets a lighter **Purpose & Scope** under
+the *same* filename `docs/PRD.md` (only the depth varies;
+[ADR-0003](docs/decisions/0003-doc-naming-conventions.md)). A lib+CLI repo is product
+tier and gets both. **Pre-push gate (mirrored CI-side as `docs-gate`):** every
+non-internal repo has ≥1 real ADR + `docs/PRD.md`; correctness-claiming repos add
+`docs/validation.md`; internal-only repos are exempt. **See [ADR-0015](docs/decisions/0015-prd-adr-standard.md).**
 
 ## README Standard (every forensic repo)
 
