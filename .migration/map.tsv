@@ -14,7 +14,7 @@ archive-forensic	archive
 zip-forensic	archive
 dar-forensic	archive
 cfb-forensic	archive
-ewf	container
+ewf	_deprecated
 ewf-forensic	container
 vhd-forensic	container
 vhdx-forensic	container

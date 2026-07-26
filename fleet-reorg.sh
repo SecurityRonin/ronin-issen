@@ -47,18 +47,29 @@ moving_repos() { awk -F'\t' '!/^#/ && NF==2 {print $1}' "$MAP"; }
 
 # ---- Phase 0: gate (§0 hard preconditions) ---------------------------------
 phase0() {
+  local strict="${1:-}"
   log "Phase 0 — gate check (§0)"
   [ -f "$MAP" ] || die "no map.tsv"
-  # (a) zero live agents — THE structural gate
+  # (a) zero live agents — THE structural gate.
+  #     BYPASS: export FLEET_REORG_ALLOW_LIVE_AGENT=1 to skip this for the READ-ONLY planning
+  #     phases (1/2/3) when you are certain no agent writes ~/.claude.json or ~/.claude/projects.
+  #     Phase 4 ALWAYS enforces it (it renames ~/.claude/projects — a live session corrupts mid-rename).
   if pgrep -f 'claude|codex' >/dev/null 2>&1; then
-    die "live claude/codex process(es) running — quit Claude and re-run from a clean shell"
+    if [ "$strict" != strict ] && [ -n "${FLEET_REORG_ALLOW_LIVE_AGENT:-}" ]; then
+      log "WARNING: live agent present, FLEET_REORG_ALLOW_LIVE_AGENT set — bypassing gate (planning phases only)"
+    else
+      die "live claude/codex process(es) running — quit Claude and re-run from a clean shell${strict:+ (phase4 never bypasses; it renames ~/.claude/projects)}"
+    fi
   fi
   # (b) verified backup marker (user creates after doing+restore-testing the backup, §0)
   [ -f "${MIG}/BACKUP-VERIFIED" ] || die \
     "no ${MIG}/BACKUP-VERIFIED — complete + restore-test the ~/src and ~/.claude backup, then: touch ${MIG}/BACKUP-VERIFIED"
-  # (c) no cargo build lock anywhere under src
-  if pgrep -f 'cargo (build|check|test|run)' >/dev/null 2>&1; then
-    die "cargo build/check/test running — stop it first"
+  # (c) no cargo build lock anywhere under src. Match the cargo BINARY by exact
+  #     process name (pgrep -x), not a -f command-line substring — the latter
+  #     false-positives on the live claude/codex agent and MCP servers whose argv
+  #     carries `cargo ...` strings or a `.cargo/bin` PATH.
+  if pgrep -x cargo >/dev/null 2>&1; then
+    die "a cargo process is running — stop it first"
   fi
   # (d) umbrella sanity
   [ -d "$COMPONENTS" ] || die "no components/ dir under $UMBRELLA"
@@ -73,7 +84,14 @@ phase1() {
   # source dirs exist, dests absent
   local bad=0
   while read -r repo; do
-    [ -d "${SRC}/${repo}/.git" ] || { log "WARN source missing: ${repo}"; bad=$((bad+1)); }
+    if [ ! -d "${SRC}/${repo}/.git" ]; then
+      # A _deprecated repo whose source is already gone is "nothing to move", not an error.
+      if [ "$(awk -F'\t' -v r="$repo" '$1==r{print $2}' "$MAP")" = "_deprecated" ]; then
+        log "INFO: _deprecated source already absent: ${repo} (nothing to move)"
+      else
+        log "WARN source missing: ${repo}"; bad=$((bad+1))
+      fi
+    fi
     [ -e "$(dest_of "$repo")" ] && { log "WARN dest exists: $(dest_of "$repo")"; bad=$((bad+1)); }
   done < <(moving_repos)
   # repo-state readiness sweep -> state-before.json (abort on unwaived dirty/ahead/behind)
@@ -166,7 +184,7 @@ phase3() {
 
 # ---- Phase 4: session-history migration (§6.4) -----------------------------
 phase4() {
-  phase0     # re-checks pgrep empty (§6.4.0)
+  phase0 strict   # re-checks pgrep empty; phase4 NEVER bypasses (§6.4.0)
   log "Phase 4 — session history"
   [ -f "${MIG}/session-map.tsv" ] || die "no reviewed session-map.tsv (copy session-map.dryrun.tsv after review)"
   cp "${HOME_DIR}/.claude.json" "${HOME_DIR}/.claude.json.bak-${TS}"
