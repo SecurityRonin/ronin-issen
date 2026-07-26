@@ -18,7 +18,8 @@
 #   ./fleet-reorg.sh phase4      # session-history migration (needs reviewed map)
 #   ./fleet-reorg.sh phase5      # reference sweep (local commits)
 #   ./fleet-reorg.sh phase6      # final gate, THEN push (rollback boundary)
-#   ./fleet-reorg.sh all         # phases 1..5 (stops before the push in 6)
+#   ./fleet-reorg.sh all         # phases 1,2,3,5,6 — skips phase4 (needs reviewed
+#                                #   session-map); phase6 is the final gate, stops before push-now
 set -euo pipefail
 
 HOME_DIR="${HOME}"
@@ -240,10 +241,10 @@ phase6() {
     dest="$(dest_of "$repo")"; [ -f "${dest}/Cargo.toml" ] || continue
     ( cd "$dest" && cargo metadata --format-version 1 >/dev/null 2>&1 ) || die "cargo metadata failed: $repo"
   done < <(moving_repos)
-  for repo in disk-forensic 4n6mount issen; do
+  for repo in disk-forensic 4n6mount useract-forensic issen; do
     dest="$(dest_of "$repo")"; ( cd "$dest" && cargo check --quiet ) || die "cargo check failed: $repo"
   done
-  log "metadata green everywhere; orchestrators check green"
+  log "metadata green everywhere; deep consumers green (disk-forensic + 4n6mount [vfs], useract-forensic + issen [orchestration])"
   log ""
   log "⛔ ROLLBACK BOUNDARY: the next step PUSHES all local commits (§6.7)."
   log "   Re-run with:  ./fleet-reorg.sh push-now   (only after you've reviewed the tree)"
