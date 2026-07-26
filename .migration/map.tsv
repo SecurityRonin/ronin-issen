@@ -8,8 +8,8 @@
 # repo	category
 forensicnomicon	knowledge
 forensic-vfs	knowledge
-jsonguard	knowledge
-safe-read	knowledge
+jsonguard	utility
+safe-read	utility
 archive-forensic	archive
 zip-forensic	archive
 dar-forensic	archive
@@ -81,14 +81,14 @@ vsc-forensic	state-history
 issen	orchestrator
 disk-forensic	orchestrator
 useract-forensic	orchestrator
-blazehash	tooling
+blazehash	utility
 lzo	tooling
 lzvn	tooling
 xpress-huffman	tooling
-timeglyph	tooling
+timeglyph	utility
 blob-decoder	tooling
 forensic-hashdb	tooling
-shrinkpath	tooling
+shrinkpath	utility
 forensic-carve	tooling
 usnjrnl-forensic	_deprecated
 name-variants	utility

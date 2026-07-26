@@ -40,7 +40,7 @@ Per-folder rationale and membership:
 | Folder | Rationale (one line) | Repos |
 |---|---|---|
 | `knowledge/` | Cross-cutting fleet-wide facts: compile-time format specs + forensic reference data — no binary deserialization by charter; everything depends **down** onto it. | forensicnomicon, forensic-hashdb |
-| `utility/` | Generic tooling libraries — not domain knowledge: safe positioned reads, hashing, output-sanitization, timestamp math. Reusable outside forensics. | safe-read, blazehash, jsonguard, timeglyph |
+| `utility/` | Generic tooling libraries — not domain knowledge: safe positioned reads, hashing, output-sanitization, timestamp math, path/name utilities. Reusable outside forensics. | safe-read, blazehash, jsonguard, timeglyph, shrinkpath, name-variants |
 | `compression/` | Pure byte-stream decompressors — a codec transforms bytes, it doesn't bundle files (not `archive/`) and it isn't a pure fact/spec (not `knowledge/`). | xpress-huffman, lzo, lzvn |
 | `archive/` | Packaging formats (`ArchiveOpen`) — unpack a logical file tree from a bundle. Distinct from an acquisition image. | archive-forensic, zip-forensic, dar-forensic, ad1-forensic |
 | `container/` | Acquisition **images** (`ContainerOpen`) — decode a dump/image → raw sector stream. | ewf-forensic, vmdk-forensic, vhdx-forensic, vhd-forensic, qcow2-forensic, dmg-forensic, aff4-forensic, ufed |
@@ -58,7 +58,7 @@ Per-folder rationale and membership:
 
 *`volume/` dropped — empty after vsc-forensic → `history/`; no placeholder kept. A future LVM reader would fold into `partition/` or reintroduce its own folder then.*
 
-**Present fleet repos assigned: 82.** Counts by folder: knowledge 2 · utility 4 · compression 3 ·
+**Present fleet repos assigned: 84.** Counts by folder: knowledge 2 · utility 6 · compression 3 ·
 archive 4 · container 8 · partition 3 · encryption 6 · filesystem 12 · memory 1 · vfs 5 ·
 log 2 · parser 26 · graph 1 · acquisition 1 · history 3 · orchestration 1. (`cas-forensic` and
 `sigstore-forensic` are named in the architecture but have no `~/src` repo yet — listed as
@@ -84,6 +84,8 @@ repos with a real cross-repo *path/patch* pin are flagged; everything else is mo
 | blazehash | ✅ | hashing (`blazehash-core` lean lib + full binary) (**moved from knowledge/**) |
 | jsonguard | ✅ | output-sanitization (**moved from knowledge/**) |
 | timeglyph | ✅ | timestamp math/decipherment (**moved from knowledge/**) |
+| shrinkpath | ✅ | path-shortening / display utility (**moved from tooling/**) |
+| name-variants | ✅ | name-variant generation — `name-variants-rs` + `name-variants-py` (**added to fleet 2026-07-27**) |
 
 ### compression/
 | repo | movable-now? | notes |
@@ -274,8 +276,8 @@ rewrite** (parked out of the fleet for now, not abandoned).
 
 ### Group A — non-forensic (as supplied)
 pipeguard, pipeguard-pro, clawback, clawpot, clawscan, clawtrader, ccchat, alaya,
-multiai, general, hacker-film-mockup, mgrs, npmls, shrinkpath, stem-branch, StrideMark, tl,
-edng, domfuzz, 1-click-github-sec, clusterpoi, name-variants, nameback, nameback.bak.
+multiai, general, hacker-film-mockup, mgrs, npmls, stem-branch, StrideMark, tl,
+edng, domfuzz, 1-click-github-sec, clusterpoi, nameback, nameback.bak.
 
 *(pipeguard-pro is one of the 8 audit "pinned" repos — path→pipeguard — but it is non-fleet, so
 its pin is irrelevant to the fleet move.)*
