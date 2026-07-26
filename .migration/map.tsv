@@ -13,7 +13,7 @@ safe-read	utility
 archive-forensic	archive
 zip-forensic	archive
 dar-forensic	archive
-cfb-forensic	archive
+cfb-forensic	parser
 ewf	_deprecated
 ewf-forensic	container
 vhd-forensic	container
@@ -22,9 +22,9 @@ vmdk-forensic	container
 qcow2-forensic	container
 aff4-forensic	container
 dmg-forensic	container
-ad1-forensic	container
-atx-forensic	container
-segb-forensic	container
+ad1-forensic	archive
+atx-forensic	parser
+segb-forensic	parser
 livedisk-forensic	acquisition
 mbr-partition-forensic	partition
 gpt-partition-forensic	partition
