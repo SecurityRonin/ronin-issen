@@ -33,7 +33,7 @@ fully published before any crate in the tier above it is merged/published.** The
 tiers collapse the dependency DAG and align to the architecture layers in
 `CLAUDE.md`:
 
-### Tier 0 — KNOWLEDGE leaves & pure codecs (zero fleet deps)
+### Tier 0 — FOUNDATION leaves & pure codecs (zero fleet deps)
 `forensicnomicon` (facade / `-core` / `-data`) · `state-history-forensic` ·
 `safe-read` · `jsonguard` · `shrinkpath` · `forensic-hashdb` · `shellitem` ·
 `timeglyph` · `protobuf-forensic` · codecs: `lzo` · `lzvn` · `lzfse` ·
@@ -51,7 +51,7 @@ Containers: `ewf` · `vmdk` · `vhdx` · `qcow2` · `aff4-forensic` · `ad1-fore
 `ntfs-forensic` · `hfsplus-forensic` · `fat-forensic` · `xfs-forensic` ·
 `ufs-forensic` · `apfs-forensic` · `exfat` · paging `memf-hw`.
 
-### Tier 3 — PARSER & OS-STRUCTURE (accept bytes; depend on KNOWLEDGE, sometimes containers)
+### Tier 3 — PARSER & OS-STRUCTURE (accept bytes; depend on FOUNDATION, sometimes containers)
 `browser-forensic` · `winevt-forensic` · `srum-forensic` · `winreg-forensic` ·
 `prefetch-forensic` · `lnk-forensic` · `bam-forensic` · `usb-forensic` ·
 `snss-forensic` · `git-forensic` · `segb-forensic` · `sqlite-forensic` ·
