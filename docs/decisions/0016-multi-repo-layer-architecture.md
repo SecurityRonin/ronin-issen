@@ -20,7 +20,7 @@ navigation primitives**, and that the crate that *interprets* an artifact
 ### The layer hierarchy (layers are architectural concepts; a repo may contribute crates to several)
 
 ```
-KNOWLEDGE      zero-dep artifact specs / format constants / contract traits
+FOUNDATION      zero-dep artifact specs / format constants / contract traits
                  forensicnomicon, state-history-forensic, jsonguard
 CONTAINER      decode a raw source format → addressable data stream
                  ewf, vhdx, dd, segb-core, memf-format, (vmdk/qcow2/iso/aff4/dmg … planned)
@@ -64,15 +64,15 @@ store *is* the entry point.)
 
 ### Dependency rules (the load-bearing part)
 
-- CONTAINER depends on KNOWLEDGE only.
-- FILESYSTEM / PAGING / OS STRUCTURE / LOG FORMAT depend on their container + KNOWLEDGE.
+- CONTAINER depends on FOUNDATION only.
+- FILESYSTEM / PAGING / OS STRUCTURE / LOG FORMAT depend on their container + FOUNDATION.
 - OS STRUCTURE (memf-windows) MAY call PARSER repos when it locates artifact bytes in
   a VA region (e.g. a SQLite page in hiberfil.sys → browser-forensic-carve).
-- **PARSER depends on KNOWLEDGE only; it accepts `Path` or `&[u8]` — never imports
+- **PARSER depends on FOUNDATION only; it accepts `Path` or `&[u8]` — never imports
   CONTAINER, FILESYSTEM, PAGING, OS STRUCTURE, or LOG FORMAT crates.**
-- QUERY ENGINE / GRAPH NAV crates depend on KNOWLEDGE and produce result-row / CAS
+- QUERY ENGINE / GRAPH NAV crates depend on FOUNDATION and produce result-row / CAS
   event types that feed PARSER or directly ORCHESTRATION.
-- `[H]` crates depend on state-history-forensic (KNOWLEDGE) plus whichever layer they
+- `[H]` crates depend on state-history-forensic (FOUNDATION) plus whichever layer they
   observe, and export `TemporalCohort<H>` upward.
 - ORCHESTRATION is the primary wiring point between all layers.
 
@@ -109,8 +109,16 @@ FORMAT / QUERY ENGINE layer that located the artifact — never inside the parse
 
 ## Consequences
 
+- **The bottom layer is FOUNDATION (renamed from KNOWLEDGE).** It is defined by
+  *dependency position* — zero-dep leaves that everything depends **down** onto —
+  not by domain. It holds both domain-knowledge leaves (forensicnomicon,
+  forensic-hashdb) AND generic utility leaves (jsonguard, safe-read, the
+  `forensic-vfs` contract). The old name wrongly implied the whole tier was domain
+  knowledge. **Layer ≠ folder:** in the reorg's physical folders this one layer spans
+  both `knowledge/` (domain facts) and `utility/` (generic libs) — the *layer*
+  (dependency position) and the *folder* (domain grouping) are distinct axes.
 - Every capability has exactly one home, and the dependency direction is
-  unambiguous (down toward KNOWLEDGE, never sideways or up).
+  unambiguous (down toward FOUNDATION, never sideways or up).
 - PARSER repos are reusable across every medium for free, because they never learn
   where their bytes came from — the single most important invariant this ADR protects.
 - **Release/publish order follows this graph bottom-up** — see

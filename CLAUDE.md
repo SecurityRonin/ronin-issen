@@ -28,8 +28,8 @@ reader/analyzer split: [ADR-0008](docs/decisions/0008-reader-analyzer-core-foren
 VFS abstraction: [ADR-0011](docs/decisions/0011-vfs-universal-container-abstraction.md)).
 Canonical vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
-**Layers** (dependencies flow down toward KNOWLEDGE; a repo may span several):
-KNOWLEDGE (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf,
+**Layers** (dependencies flow down toward FOUNDATION; a repo may span several):
+FOUNDATION (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf,
 vhdx, dd, segb-core, memf-format) → FILESYSTEM (ext4fs-forensic, 4n6mount) / PAGING
 (memf-hw) / OS STRUCTURE (memf-windows) / LOG FORMAT (winevt-forensic) / QUERY ENGINE
 (issen-remote-access, velociraptor-parser) / GRAPH NAV (cas/git/sigstore-forensic) →
@@ -41,9 +41,9 @@ PARSER (browser/winevt/srum/segb-forensic, …) → ORCHESTRATION (Issen).
 state-history is a cross-cutting functor lifting each base primitive to a
 time-indexed variant (`TemporalCohort<H>`).
 
-**Dependency rules (load-bearing):** CONTAINER depends on KNOWLEDGE only;
-FILESYSTEM/PAGING/OS-STRUCTURE/LOG depend on their container + KNOWLEDGE; **PARSER
-depends on KNOWLEDGE only and accepts `Path`/`&[u8]` — it never imports a
+**Dependency rules (load-bearing):** CONTAINER depends on FOUNDATION only;
+FILESYSTEM/PAGING/OS-STRUCTURE/LOG depend on their container + FOUNDATION; **PARSER
+depends on FOUNDATION only and accepts `Path`/`&[u8]` — it never imports a
 CONTAINER/FILESYSTEM/PAGING/OS/LOG crate**; OS STRUCTURE MAY call PARSER when it
 locates artifact bytes in a VA region; ORCHESTRATION is the primary wiring point.
 
