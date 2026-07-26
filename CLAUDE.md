@@ -251,253 +251,31 @@ tracev3-forensic [planned], zeek-forensic [planned], cloudtrail-src [planned]):
 
 ## The Reporting Model — `forensicnomicon::report`
 
-Format specs are one role of the KNOWLEDGE leaf; the **normalized reporting
-vocabulary** is the other. Every analyzer in the fleet emits its findings as this
-single model so ORCHESTRATION (Issen, disk4n6) and a future GUI render them
-uniformly instead of N bespoke `XxxAnalysis` types. It is the **union (superset)
-of the analyzers' data, not a flattening**.
-
-### Core types (`forensicnomicon::report`)
-
-- `Severity` — `Info < Low < Medium < High < Critical`. A finding carries
-  `Option<Severity>`: `None` ("not scored") is forensically distinct from
-  `Some(Info)` ("scored, benign"). Emit `None` only when the analyzer genuinely
-  cannot grade in isolation (e.g. a PE writable+executable section); otherwise grade.
-- `Category` — the analytical lens: `Integrity, Structure, Residue, Provenance,
-  History, Concealment, Threat`. Coarse by design; fine taxonomy lives in `code` + MITRE.
-- `Finding { severity, category, code, note, source, subjects, evidence, context }`
-  — constructed **only** via `Finding::observation(sev, cat, code)` /
-  `Finding::unrated(cat, code)` + the returned builder, never a struct literal.
-- `FindingContext { confidence, occurrences, timestamps, external_refs, tags }`
-  — the behavioral superset; disk findings leave it empty, memory/winevt/srum populate it.
-- `Location` — `ByteOffset/Lba/Sector/Rva/RecordId/Path/Field/Key/Other{space,value}`.
-- `SubjectRef { scheme, kind, id, label }` — non-disk subjects (process/module/registry/…).
-- `ExternalRef` (e.g. `ExternalRef::mitre_attack("T1055.012")`) — **"consistent with", never a verdict.**
-- `Report { findings, provenance, timeline, metadata }` — the aggregate Issen renders;
-  `Report::{max_severity, findings_at_least, unrated_findings}`.
-
-### The producer pattern
-
-Each analyzer KEEPS its typed `AnomalyKind`/event type (domain knowledge) and
-converts to canonical Findings — `forensicnomicon` never enumerates every anomaly kind:
-
-- **Static codes** → `impl forensicnomicon::report::Observation` for the kind
-  (`severity/category/code/note` required; `subjects/evidence/mitre/confidence` optional).
-  `Observation::to_finding(Source)` assembles the `Finding` in one place.
-- **Dynamic codes** (usnjrnl rule names, memory `Finding::Other(String)`, srum filter
-  flags) → an inherent `fn to_finding(&self, Source) -> Finding` using the builder directly,
-  because `Observation::code()` returns `&'static str`.
-
-### Conventions (binding across the fleet)
-
-- **`code` is a published contract**: scheme-prefixed SCREAMING-KEBAB
-  (`VMDK-RGD-MISMATCH`, `MBR-PART-OVERLAP`, `MEM-PROCESS-HOLLOWING`,
-  `WINEVT-PROVIDER-GUID-SPOOFING`). Never change a shipped code; new variants get new codes.
-- **Category** defaults to `Category::from_code(code)`; override per-variant only where the
-  keyword classifier is wrong (e.g. overloaded `BOOT-` prefixes).
-- **Findings are observations, never legal conclusions** — the analyst/tribunal concludes.
-  Use "consistent with" for MITRE/threat narration.
-- **`#[non_exhaustive]` + builders** keep the model additively evolvable: a new field,
-  `Location`, or `Category` variant is a non-breaking `forensicnomicon` minor bump, not a
-  fleet-wide break. Consumers must use a `_` arm when matching the shared enums.
-
-### Severity normalization (the canonical mapping every analyzer applies)
-
-| Native scale | → canonical |
-|---|---|
-| 5-level (mbr, gpt, apm, iso9660, usnjrnl, memory) | identity |
-| 4-level (vhdx, ewf, winevt, ese-integrity) | `Info→Info, Warning→Medium, Error→High, Critical→Critical` |
-| 3-level (vmdk: `Info/Warning/Error`) | per-variant re-grade (a forensic judgment, not a blanket rename) |
-| triage (srum-analysis: `Clean/Informational/Suspicious/Critical`) | `Clean→Info, Informational→Low, Suspicious→High, Critical→Critical` |
-| unrated (exec-pe `PeAnomaly`) | graded per-variant on migration, or `severity: None` |
-
-### Dependency direction
-
-`forensicnomicon` is the leaf — every analyzer depends **down** onto it; it depends on
-no one. Adding `report` did not change that. disk-forensic / Issen depend down onto both
-the migrated analyzers and `forensicnomicon::report` to aggregate findings into one `Report`.
+Every fleet analyzer emits its findings as the single normalized `forensicnomicon::report` model — the union (superset) of the analyzers' data, not a flattening. `Finding`s are built only via the `Finding::observation(...)` / `Finding::unrated(...)` builders (never struct literals), carry `Option<Severity>` (`Info<Low<Medium<High<Critical`; `None` = not-scored, distinct from `Some(Info)`), are `#[non_exhaustive]` for additive evolution, and are observations never legal conclusions ("consistent with", never a verdict). Every native severity scale normalizes to the canonical scale; each analyzer keeps its typed `AnomalyKind` and converts via `impl Observation`. `forensicnomicon` stays the leaf — analyzers depend down onto it. **See [ADR-0007](docs/decisions/0007-normalized-report-model.md).**
 
 ## Crate-structure standard — reader/analyzer split (core/ + forensic/)
 
-**Standard layout for every format** (adopted 2026-06-08; reference impl: `ntfs-forensic`):
-
-- **One workspace repo, named `<x>-forensic`** (the analyzer is the headline; keep this name even though the repo also holds the core crate).
-- Two members:
-  - **`core/`** → crate **`<x>-core`** — the raw reader/parser, exposes `Read + Seek` (containers) or `NtfsFs`-style navigation (filesystems). No findings.
-  - **`forensic/`** → crate **`<x>-forensic`** — the anomaly auditor: `AnomalyKind`/`Anomaly` + `audit()`/`audit_record()` emitting `forensicnomicon::report::Finding` via `impl Observation`, **depending on `<x>-core` *by default*** (path within the workspace, registry version for publish) — but see the principle below: this dependency is the default, not a requirement.
-- Optional `cli/` member for a debug CLI (the end-user CLI is still `disk4n6`/Issen).
-
-**`-forensic` is NOT required to depend on `-core` — it may need to go lower (binding design principle).** A `-core` reader is built to read *valid* data robustly, so it abstracts away exactly the detail a forensic auditor must SEE: raw byte/section layout, slack between records, deleted/overwritten regions, malformed fields a robust reader silently normalizes or skips, checksums it transparently verifies-and-discards. Forensic examination "often needs to go much lower level than the `-core` API." So a `-forensic` analyzer MAY parse the format itself at a lower level (over the raw `Read + Seek` / container bytes), or depend on a layer *below* `-core` (e.g. the CONTAINER byte stream, or `forensicnomicon` format constants directly), **instead of — or in addition to — `-core`**. Decision rule: build `-forensic` on `-core` when `-core`'s API exposes everything the audit needs; drop to lower-level or independent parsing when it doesn't. Never contort an audit through a happy-path reader API that hides the very anomaly it is hunting — the auditor needs the raw, possibly-broken structure, not the reader's normalized view. Established models in the fleet (verified 2026-06-29): **ewf-forensic** consumes only `ewf::sections` (the low-level structural parser), explicitly *not* the reader's `Read + Seek` data interface (its Cargo.toml says so); **ntfs-forensic** takes raw bytes directly — `audit_record(&[u8])`, `audit_mft_mirror(&[u8], &[u8])`, `audit_logfile(&[u8])` — parsing headers in-situ so it can see deleted/overwritten/slack records `ntfs-core`'s reader would normalize or reject. The strongest opportunities to formalize this (where `-forensic` currently re-parses raw structure or hacks around the reader): **ntfs-forensic** and **vmdk-forensic** (HIGH); qcow2/vhdx (MEDIUM). This refines the "depending on `<x>-core`" line above: prefer it, do not mandate it.
-
-**Naming / imports:**
-- If the bare `<x>` crate name is taken on crates.io by a third party we can co-exist with safely (obscure/ours), publish `<x>-core` with `[lib] name = "<x>"` so consumers write `use <x>::…`. If the bare name is a *popular* crate (e.g. `ntfs` = Colin Finck's), do **not** hijack the import — keep `<x>_core` (ntfs-core imports as `ntfs_core`).
-- **If `<x>-core` itself is taken** on crates.io by an *unrelated* third party (e.g. `zfs-core` = the `libzfs_core` FFI bindings), the reader publishes under the **`<repo>-core` form — `<x>-forensic-core`** — mirroring the generic-word `browser-forensic-core` case (self-describing on crates.io as "the core of the `<x>-forensic` suite"). Keep the import path `<x>_core` via `[lib] name = "<x>_core"` so consumers are unaffected; the analyzer stays `<x>-forensic`. (Reference: `zfs-forensic-core` reader + `zfs-forensic` analyzer.)
-- Reader = `<x>-core`, analyzer = `<x>-forensic`. Always.
-
-**Coverage gate:** each crate keeps 100% line coverage (`cargo llvm-cov --lib`, fail on any `DA:n,0`) **except lines annotated `// cov:unreachable`**. The analyzer's `audit_record`-style entry points are tested end-to-end (build a valid record, drive parse→extract→audit), not just the component helpers.
-
-**Coverage is a backstop, not a 100%-for-its-own-sake target.** The number exists to prove behavior is exercised and to catch regressions — never pursue it by deleting defensive code or contriving meaningless tests (see the `// cov:unreachable` standard below, and the global "Coverage — A Backstop, Not a Target" discipline). **Pure-library crates** (the reference: vmdk/vhdx/ntfs/qcow2) gate on `--lib` at 100%. **Binary-shipping repos** (CLI/TUI/server — e.g. browser-forensic with `br4n6`/`bw`/MCP) gate on **`--workspace`** instead, because `--lib` neither counts integration-test coverage nor measures `main()`/render-loop bins, so it *understates* a binary repo. For those, keep the bin glue thin via the **Humble Object** pattern (decisions in testable libs, only an irreducible draw/read/transport shell in `main()`/the loop), ratchet the `--workspace` threshold to the actual achieved level (no slack), and document the residual untestable shell — do not exempt the glue silently nor drop the bar to hide it.
-
-**`// cov:unreachable` — defence-in-depth over coverage purism (binding standard).** Panic-free parsers keep defensive guard arms (`let Some(x) = … else { continue }`, bounds-checked `.get()` fallbacks, length checks) that are *provably unreachable* under a dominating invariant but are kept so the code degrades gracefully if that invariant is ever broken by a future change. Such an arm cannot be exercised by any test. **Never delete or restructure a defensive guard solely to satisfy the coverage gate** — that trades robustness for a number, the exact opposite of the Paranoid Gatekeeper standard. Instead append `// cov:unreachable: <the dominating invariant>` to the uncovered line (the `continue;`/`return …;`/guard expression). The CI gate exempts only annotated lines; every other zero-hit line still fails. Prefer restructuring to *infallible-by-construction* (e.g. `split_at_mut` so there is no `Option` to guard) where it loses no defence; reach for a crafted-input test before annotating (only annotate genuinely-unreachable arms); the `code-coverage` CI job reads each `DA:n,0` line's source and fails unless it carries the marker.
-
-**Realignment status:** `vmdk`, `vhdx`, `ntfs`, and `qcow2` are all migrated to the workspace standard (vmdk-forensic, vhdx-forensic, ntfs-forensic, qcow2-forensic — each `core/` + `forensic/`).
+Every format is one workspace repo `<x>-forensic` with two members: `core/` → `<x>-core` (raw reader — exposes `Read + Seek`/navigation, no findings) and `forensic/` → `<x>-forensic` (anomaly auditor emitting `forensicnomicon::report::Finding` via `impl Observation`). `-forensic` depends on `-core` by default but MAY drop lower (raw bytes / container / `forensicnomicon` constants) when `-core`'s happy-path reader hides the very anomaly it hunts. Reader = `<x>-core`, analyzer = `<x>-forensic`, always (crates.io name collisions handled via `[lib] name`, per ADR-0009). Coverage gate: 100% line coverage (`cargo llvm-cov --lib`; `--workspace` for binary-shipping repos) with `// cov:unreachable` on provably-dead defensive arms — never delete a defensive guard to satisfy the gate. **See [ADR-0008](docs/decisions/0008-reader-analyzer-core-forensic-split.md).**
 
 ## Crate naming grammar (binding — applies to every fleet repo)
 
-Two repo shapes, two naming patterns. Decide which shape a repo is *before* naming its crates.
-
-**Pattern A — single-format repo** (containers/filesystems: vmdk, vhdx, ntfs, qcow2, segb).
-Exactly two crates: `<x>-core` (reader) + `<x>-forensic` (analyzer). The `<x>-forensic` *crate*
-name is reserved for this one-reader/one-analyzer shape (see the Crate-structure standard above).
-
-**Pattern B — multi-crate PARSER/domain suite** (browser, winevt, memf). Decompose *by concern*
-with role suffixes. The repo name is the **umbrella and is NOT itself a crate** — `memory-forensic`
-→ `memf-*`, `winevt-forensic` → `winevt-*`, `browser-forensic` → `browser-forensic-*` (its short form `browser-*` is a generic word → keep the full prefix; see the self-describing rule below); there is no
-`memory-forensic` / `winevt-forensic` / `browser-forensic` *crate*. Never rename a suite's analyzer
-to `<repo>-forensic` (it over-claims, collides with the repo name, and breaks Pattern B). Suffixes:
-
-| suffix | role | examples |
-|---|---|---|
-| `-core` | shared/domain types + format constants | browser-forensic-core, winevt-core |
-| *family name* | a reader (one format/source) | browser-forensic-chrome / -firefox / -safari |
-| `-carve` | recovery (free-page / WAL / record / unallocated) | browser-forensic-carve, winevt-carver |
-| `-memory` | pure byte-pattern scanner, **medium-agnostic** | browser-forensic-memory, winevt-memory |
-| `-integrity` | tamper / clearing / corruption detection (analyzer slot) | browser-forensic-integrity |
-| `-analysis` | semantic analysis (e.g. event-ID → ATT&CK) | winevt-analysis |
-| `-triage` | one-click **orchestrated report** (NOT `-rt`, NOT `-orchestrator`) | winevt-triage, browser-forensic-triage |
-| `-cli` | front-end: CLI tool (may carry an interactive TUI *mode*) | browser-forensic-cli (`br4n6`), winevt-cli (`ev4n6`) |
-| `-tui` | front-end: interactive TUI, no scriptable surface | *(pure-TUI only)* |
-| `-mcp` | front-end: MCP server (agent-facing) | browser-forensic-mcp |
-
-**Binding rules:**
-
-- **The suite prefix must be self-describing on crates.io.** A crate name is read *bare* — in search,
-  `cargo add`, and transitive dependency lists — with all repo/GitHub context stripped; the name alone
-  must claim a namespace. A *distinctive* short prefix (`memf-`, `winevt-`, `snss-`) stands alone and is
-  preferred for import brevity. A *generic-word* prefix does **not** stand alone, so that suite takes the
-  full `<repo>-*` form: `browser-forensic-*`, never `browser-*` (which reads as a generic browser lib).
-  The `repository` link is GitHub-only and never travels into the name.
-
-- **Name by the role the analyst recognizes (the outcome), not by internal mechanism.** The
-  orchestrated-report crate is `-triage` (what the user gets), never `-orchestrator` (how it is
-  built) — and "orchestration" is reserved for issen's fleet-wiring layer. *One concept, one name*
-  across the fleet: do not use `-rt` in one repo and `-triage` in another.
-- **Name by the knowledge the crate owns; the dependency arrow then follows.** A format's
-  byte-scanner is `<format>-memory` and lives **with the format parser**, depending DOWN on
-  `<format>-core` — never `memf-<format>`. `memf-*` owns *memory navigation* (VA→PA, EPROCESS,
-  VADs) and hands `&[u8]` across the boundary; the artifact-pattern knowledge is parser-side.
-  PARSER crates must never import PAGING/OS-STRUCTURE, so a `memf-browser` would invert the
-  dependency. (A memf-side *locator* that walks a process's VADs to find a region is a legitimately
-  separate crate that *feeds* `<format>-memory` its bytes — complementary, not a rename.)
-- **Front-end binaries follow the `<x>4n6` convention:** br4n6 (browser-forensic-cli), ev4n6 (winevt-cli),
-  sqlite4n6, mem4n6, disk4n6. The *binary* is `<x>4n6`; the *crate* is `<artifact>-cli` (a CLI tool,
-  which may carry an interactive TUI *mode*), `-tui` (pure-TUI only), or `-mcp` (agent-facing server).
-  A **dual-mode** tool is `-cli` for fleet consistency (the CLI is the primary surface; the TUI is a
-  mode), never `-tui` (that hides the CLI). **`-cli` is intentionally overloaded to cover dual-mode** —
-  one consistent suffix fleet-wide is worth more than the precision of a separate `-term` (deliberate,
-  non-purist; e.g. browser-forensic-cli is CLI + TUI yet stays `-cli`).
-- **A reconstructor/`-writer` is read-only-safe** only when it emits derived artifacts to NEW paths
-  (carved/repaired output), never the source. Prefer `-reconstruct` / `-rebuild` over `-writer` in
-  a read-only suite to avoid the "evidence editor" misread.
-
-**crates.io rename window:** a crate can be *deleted* (name freed, not merely yanked) within **72h
-of first publish**, or later only if single-owner + <500 downloads + no dependents. Settle names
-*before* publishing; if a rename is needed, do it inside the 72h window (delete + republish = clean,
-no orphan). After 72h, a yank leaves the old name as a permanent reserved orphan.
+Two repo shapes, two naming patterns (decide the shape *before* naming crates): **Pattern A** single-format repo = exactly `<x>-core` (reader) + `<x>-forensic` (analyzer); **Pattern B** multi-crate suite = role-suffixed crates (`-core`/`-carve`/`-memory`/`-integrity`/`-analysis`/`-triage`/`-cli`/`-tui`/`-mcp`) under a self-describing prefix — the repo name is an umbrella, NOT itself a crate. The suite prefix must stand alone on crates.io (distinctive short `memf-`/`winevt-`; a generic word takes the full `<repo>-*` form, e.g. `browser-forensic-*`). Name by the analyst-facing outcome and the knowledge the crate owns, not the mechanism (`-triage` not `-orchestrator`; `<format>-memory` not `memf-<format>`). Front-ends: binary `<x>4n6`, crate `-cli`/`-tui`/`-mcp`. Settle names before publishing (72h crates.io delete window). **See [ADR-0009](docs/decisions/0009-crate-naming-grammar.md).**
 
 ## Dependency Preference — prefer our own crates (binding)
 
-**Always prefer our own (SecurityRonin / `h4x0r`) crates over third-party ones** when an equivalent exists or can be made to exist. A hard rule, not a tiebreaker.
-
-- Before adding a third-party dependency, check whether we already publish a crate for it (`~/src/*`, the SecurityRonin crates.io account). If we do, use ours.
-- If a third-party crate is wired in but we have (or are building) our own equivalent, **migrate to ours** — proactively flag and do it, not as a "follow-up."
-- For name collisions and the reader/analyzer split, follow the **Crate naming grammar** and **Crate-structure standard** above (publish under a `-core` package with `[lib] name = "<bare>"` so the import path is unchanged; `*-core` reader + `*-forensic` analyzer).
-- **Prefer the *published* registry crate over a `path` dependency once it is on crates.io.** Path deps are for crates not yet published, or a coordinated in-flight workspace change. As soon as ours is published, switch dependents to the registry version (`x = { version = "0.2", package = "x-core" }`) — reproducible, decoupled from local checkout layout (no breakage when a sibling repo is renamed/moved), and matches what external consumers get. When you publish a new fleet-crate version, sweep its dependents off the stale path dep onto the new registry version.
+Always prefer our own (SecurityRonin / `h4x0r`) crates over third-party equivalents — a hard rule, not a tiebreaker; before adding a third-party dep check whether we already publish one, and migrate any wired-in third-party dep to ours proactively when an equivalent exists or can be built. Prefer the *published* registry crate over a `path` dep once ours is on crates.io. (The one inversion: never hand-roll crypto — use the audited ecosystem crate.) **See [ADR-0010](docs/decisions/0010-prefer-our-own-crates.md).**
 
 ## VFS & Universal Container Abstraction (binding — format-agnostic image/filesystem access)
 
-**A consumer that reads an evidence image MUST NOT know one container or filesystem format from another.** It asks the abstraction to open the path and gets back a uniform byte source; only the abstraction layer knows E01 from VMDK, or NTFS from APFS. This is the container/filesystem application of *Dependency Preference* + DRY: one open-any-image entry point, not N parallel detection stacks in N consumers.
-
-- **Raw disk images → `disk_forensic::container::open(path)`** (the published `disk-forensic` crate). It sniffs the container magic and decodes it to a uniform `OpenedImage { format, size, reader: Box<dyn ReadSeek> }` — Raw/dd, **EWF/E01, VMDK, QCOW2, VHD, VHDX, DMG, ISO, AFF4** (physical). Rename a `.vmdk` to `.bin` and it still works. A corrupt/unsupported-variant container fails **loud** (`OpenError`), never silent wrong output.
-- **Logical file containers → `disk_forensic::logical::open(path)`.** AD1 (FTK Custom Content) and logical AFF4 (`aff4:FileImage`) are file trees, **not** sector-level disks — there is no raw disk underneath. `container::open` on one returns a typed `OpenError::LogicalContainer(_)` pointing at `logical::open` (which yields `entries()` + `read_file`), **never** a bogus disk reader. Keep the raw-disk vs logical distinction honest at the type level — do not shoehorn a file archive into the raw-disk contract.
-- **Filesystems over a byte source → `forensic-vfs`.** `forensic-vfs` is the KNOWLEDGE-leaf contract crate: the `ImageSource` positioned-byte edge + volume-system / crypto-layer / filesystem-probe traits + the recursive `PathSpec` locator (no parsers). Readers implement the traits; `forensic-vfs-engine` composes the concrete decoders (ewf/vmdk/dmg + ntfs/fat/ext4/apfs/hfsplus …) so a whole stack — `E01 → GPT → BitLocker → NTFS` — reads as one `Arc<dyn ImageSource>` that N workers share and no path can write.
-- **The rule:** a consumer depends on the ABSTRACTION (`disk-forensic` / `forensic-vfs`), **never** on a per-format container crate (`ewf`/`vmdk`/`dmg`/`qcow2`/…) or a per-filesystem crate directly. Adding a new format then benefits every consumer at once. **A consumer that special-cases one format is the smell this policy exists to catch** (e.g. an `if ewf { … }` branch in a carver is wrong — call `container::open` and let it decode). Migrate any such branch to the abstraction proactively, not as a "follow-up".
-- **Honest current gaps (state them, don't hide them):** `forensic-vfs-engine` is `publish = false`, so cross-repo *filesystem* composition still uses a path/git dep until it publishes; `disk-forensic`'s `ReadSeek` trait lacks a `Send` bound, so a `Send + Sync` `ImageSource` adapter needs a worker-thread seam until `+ Send` is added; multi-segment E01/AD1 coverage follows the underlying reader.
+A consumer that reads an evidence image MUST NOT know one container/filesystem format from another — it depends on the ABSTRACTION, never on a per-format crate: raw disk images via `disk_forensic::container::open(path)`, logical file containers via `disk_forensic::logical::open(path)`, filesystems over a byte source via `forensic-vfs`. A format special-case (`if ewf {…}`) in a consumer is the smell this policy exists to catch; migrate it to the abstraction. **See [ADR-0011](docs/decisions/0011-vfs-universal-container-abstraction.md).**
 
 ## Security & Robustness Standard — Paranoid Gatekeeper (MANDATORY for every `*-core` / `*-forensic` crate)
 
-These crates parse **untrusted, attacker-controllable disk images** — *never panic, never read out of bounds, never trust a length field.* They meet the global **panic-free lint recipe, pre-publish gate, and CI shape** (`~/.claude/CLAUDE.core.md` → *Rust Lint Posture* + *Pre-Push & Pre-Publish Discipline*); the **forensic superset adds**:
-
-- **`unsafe` mmap exception:** a reader that legitimately needs one bounded `unsafe` (e.g. `memmap2::Mmap::map`) downgrades the base `unsafe_code = "forbid"` to `"deny"` + a justified per-site `#[allow(unsafe_code)]` (`forbid` can't be locally overridden). ewf-forensic does this for its 4 mmap sites; every other `unsafe` stays a hard error.
-- **Bounds-checked readers on the image — route through the `safe-read` crate; NEVER hand-roll a per-crate `bytes.rs`.** Every integer field read goes through the published **`safe-read`** crate (`no_std`, `forbid(unsafe)`, fuzzed): `le/be_u16/u32/u64` + `u8` return `0` out of range (never panic), and the `try_*` twins return `None` when `0` must be distinguished from absent/truncated. This is the fleet's single audited implementation — **do not re-derive `read_uNN_le`/`bytes.rs` in each crate** (the recurring DRY+robustness failure: hand-rolled copies drift and some `data.get(off..off+4)` variants can overflow `usize`, which `safe-read`'s `checked_add` cannot). `forensic-vfs` re-exports `safe-read`, so umbrella crates get it transitively (**forensic-vfs ADR-0005** is the decision record). `safe-read` handles *fixed-width integer fields only*; range-checking every length/offset/count *from the image* before use and capping allocations against alloc bombs remain the reader's job.
-- **Fuzzing — one target per parsed structure** (ntfs is the model: `boot`, `record`, `attributes`, `attribute_list`, `runlist`, `index_buffer`, `compress`, …) **plus** a `fuzz_forensic` target driving the full inspect/audit pipeline; `fuzz.yml` builds + smoke-runs every target.
-- **Real-artifact CI validation:** beyond the global gates, validate `inspect()` / `audit()` against **real artifacts** (e.g. qcow2 vs qemu-img images with backing-file/snapshot/encryption + a CirrOS corpus), not only synthetic fixtures; **100% line coverage** (`cargo llvm-cov --lib`, `// cov:unreachable` per the coverage-gate standard above).
-
-**Compliance (2026-06-08):** qcow2, vmdk, vhdx, ewf, ntfs-forensic all enforce the `unwrap_used`/`expect_used = deny` panic lints with panic-free bounds-checked readers, and all have `fuzz.yml`. Panic-free remediation counts: vhdx 80 reads, ewf 47, ntfs 44+2, qcow2 clean by construction. Residual debt to clear in a *separate* pass (not security — pre-existing pedantic/fmt style): vhdx ~30 pedantic warnings, ewf broad stylistic allow-list + fmt diffs. The safety lints are hard denies everywhere.
+Every `*-core`/`*-forensic` crate parses untrusted, attacker-controllable images: *never panic, never read out of bounds, never trust a length field.* It meets the global panic-free lint recipe + pre-publish gate + CI shape, plus the forensic superset — bounded `unsafe` only for mmap (`forbid`→`deny` + per-site allow), every integer read through the published `safe-read` crate (NEVER a hand-rolled `bytes.rs`), one fuzz target per parsed structure + a full-pipeline `fuzz_forensic`, and real-artifact CI validation at 100% coverage. **See [ADR-0012](docs/decisions/0012-paranoid-gatekeeper-security-standard.md).**
 
 ## Batteries-Included — Compile Everything In (binding fleet default)
 
-A forensic tool in the field must do the whole job from one artifact — the analyst
-cannot `cargo build --features gpu,cloud` on an evidence workstation, and a capability
-that isn't compiled in is a capability that isn't there when it matters. So:
-
-- **`default-features = false` is BANNED as a way to slim a fleet dependency.** Depend on
-  fleet crates (and capability deps like `blazehash`) with their full default feature set;
-  the analyst gets a single static binary that can hash, carve, decompress, query, and
-  report without a rebuild. Slimming to "keep the dep tree small" or to dodge a gate is the
-  wrong instinct — it ships a tool that silently can't do the thing.
-- **When full features trip a gate, fix the GATE, not the feature set.** The canonical case:
-  `blazehash` pulls `xxhash-rust` (BSL-1.0), which fails a downstream `cargo deny` license
-  allowlist. The fix is to **allow BSL-1.0 in the fleet `deny.toml`** (xxhash is a legitimate
-  forensic hash), NOT to `default-features = false` blazehash and lose every other algorithm.
-  Same for a heavy transitive: address it in `deny.toml`/`Cargo.lock`, never by amputating
-  capability. (A genuine pre-release in the graph — e.g. `ml-dsa 0.1.0-rc.8` — is publish
-  hygiene: pin it, don't slim around it.)
-- **Commit `Cargo.lock` in EVERY fleet repo — binary AND library (binding).** For binaries/apps
-  it pins the batteries-included graph the analyst ships (a fresh resolution can pull a broken or
-  license-tainted version — this bit 4n6mount: no committed lock → fresh resolution → CI red,
-  mis-diagnosed as a blazehash compile bug — blazehash compiles fine). For **libraries the reason is
-  cargo-vet stability**: a repo whose CI runs `cargo vet --locked` but does NOT commit its lock makes
-  CI *fresh-resolve the latest of every dep on every run*, so the moment any transitive dep publishes
-  a new version (serde_json 1.0.150→1.0.151, serde 1.0.229, forensicnomicon 1.8.1, …) the version-
-  pinned exemptions go stale and vet turns red — the "freshness treadmill" (`cargo vet` passes locally
-  off an older cached lock while CI fails, the most confusing form). Committing the lock makes CI honor
-  the pinned graph, so exemptions stay valid until the lock is *deliberately* bumped, and **Renovate
-  `lockFileMaintenance` bumps it in a controlled PR** (where the exemption/audit regen happens once,
-  reviewed, not on every push). This inverts the old "libraries don't commit Cargo.lock" convention —
-  and it's fine, because a consumer still ignores a dependency library's lock; committing it only
-  governs *that library's own CI/dev*. Companion vet gotcha: the `vet` CI job needs a `cargo fetch`
-  step before `cargo vet --locked` (without a committed lock `cargo metadata --locked` cannot create
-  the lock it needs — "cannot create the lock file"); with the lock committed this is moot but keep it.
-- **Lean library core, full binary (the preferred mechanism — binding).** When a capability
-  crate is both a heavy end-user tool AND something other fleet *libraries* link for one
-  primitive, split it the way the fleet splits readers: a lean `<x>-core` library carrying just
-  the primitives (e.g. `blazehash-core` = the hash algorithms, no GPU/cloud/DuckDB/yara), and the
-  full `<x>` app/binary crate (every feature compiled in) depending on `<x>-core`. Fleet
-  *libraries* that need only the primitive depend on `<x>-core` (lean, so no `default-features =
-  false` is ever needed); fleet *binaries* and the `<x>` tool itself stay batteries-included. One
-  `default` cannot be both lean-for-libraries and full-for-the-binary — the **split**, not
-  feature-juggling, is the answer. Reference: `blazehash` → `blazehash-core` (lean lib) +
-  `blazehash` (full binary); `ext4fs-core`/`ewf-forensic` depend on `blazehash-core` for
-  `algorithm::hash_bytes`, never the GPU+cloud app stack.
-- **Decode/enrichment capability is NEVER opt-in — the `*-forensic`/analysis layer is capable by
-  default.** Value/BLOB decoders (`blob-decoder` for bplist/protobuf/gzip/zlib/snappy/base64/utf16/
-  json, recursively unwrapped), timestamp decipherment (`timeglyph`), and the like are ALWAYS
-  compiled into the analysis layer — never behind a Cargo feature the analyst must know to enable.
-  An examiner staring at an opaque SQLite BLOB must get "binary plist → {…}" / "protobuf → N fields"
-  from the zero-config path, not a rebuild. A hard-coded special case (e.g. sqlite-forensic's
-  WebKit-`.localstorage` UTF-16 helper) is a *narrow* known-artifact convenience — it does NOT
-  substitute for wiring in the general decoder. **MSRV yields to capability here:** if pulling a
-  capability dep raises the analysis crate's MSRV (e.g. `blob-decoder` → 1.88 via `plist`→`time`),
-  TAKE the bump — do NOT feature-gate to preserve a low MSRV. The low-MSRV floor is preserved where
-  it belongs via the split: the lean `*-core` reader stays low-MSRV for third-party library reuse;
-  the `*-forensic` layer + the binary carry the full decode stack and whatever MSRV it needs.
-  (Lived case: proposing an optional `blob-decode` feature on sqlite-forensic was wrong — it must
-  **hard-dep** `blob-decoder` in the forensic layer, always on.)
-- **Exception (the only one):** a genuinely optional, *rarely-wanted* heavy subsystem MAY be a
-  named non-default feature **as long as the shipping binary turns it on**. The library's
-  `default` may stay lean for third-party reuse, but every fleet binary that links it builds
-  with the full feature set. The slim path is for outside consumers, never for our own tools.
+Compile every capability in; a capability not compiled in is not there in the field. `default-features = false` is BANNED as a way to slim a fleet dependency; when full features trip a gate, fix the GATE (allow the license, pin the pre-release, commit the lock), not the feature set; deferring or dropping a capability to dodge a gate is banned. Commit `Cargo.lock` in EVERY fleet repo — binary AND library. The lean `<x>-core` library + full `<x>` binary split is the mechanism when a dep is both a library primitive and a heavy tool. Decode/enrichment (`blob-decoder`, `timeglyph`) is always-on in the `*-forensic`/analysis layer, never feature-gated (MSRV yields to capability). **See [ADR-0013](docs/decisions/0013-batteries-included.md).**
 
 ## Fleet GUI Standard — egui (single binary, crates.io-publishable)
 
