@@ -74,7 +74,7 @@ repos with a real cross-repo *path/patch* pin are flagged; everything else is mo
 ### knowledge/
 | repo | movable-now? | notes |
 |---|---|---|
-| forensicnomicon | ✅ | KNOWLEDGE leaf; `report` model + format specs |
+| forensicnomicon | ✅ | FOUNDATION leaf; `report` model + format specs |
 | forensic-hashdb | ✅ | forensic reference data — NSRL / malware / LOLDrivers IOC hash sets (domain knowledge, **resolved: knowledge/**) |
 
 ### utility/
