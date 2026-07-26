@@ -91,3 +91,4 @@ forensic-hashdb	tooling
 shrinkpath	tooling
 forensic-carve	tooling
 usnjrnl-forensic	_deprecated
+name-variants	utility

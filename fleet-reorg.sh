@@ -134,7 +134,7 @@ PY
 }
 
 # ---- Phase 2: move repos + worktree repair (§6.2, order §4.4) ---------------
-ORDER="knowledge archive container volume encryption filesystem memory log parser graph state-history tooling orchestrator _deprecated"
+ORDER="knowledge utility archive container volume encryption filesystem memory log parser graph state-history tooling orchestrator _deprecated"
 phase2() {
   phase0
   log "Phase 2 — move (leaves-first)"
