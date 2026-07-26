@@ -494,6 +494,22 @@ that isn't compiled in is a capability that isn't there when it matters. So:
   the `*-forensic` layer + the binary carry the full decode stack and whatever MSRV it needs.
   (Lived case: proposing an optional `blob-decode` feature on sqlite-forensic was wrong — it must
   **hard-dep** `blob-decoder` in the forensic layer, always on.)
+- **DEFERRING or DROPPING a capability to dodge a gate is BANNED — the same failure as
+  feature-gating, one step worse.** Removing a format / decoder / reader from a layer to keep an
+  MSRV low (or to dodge a license / dep-weight / build gate) is not a "scope decision" or a
+  "follow-up" — it ships a tool that silently *cannot do the job*, which is exactly what this
+  principle forbids. When a capability dep raises a layer's MSRV, **TAKE the bump**; do not
+  amputate the capability, do not feature-gate it, and do not "defer it to a later PR." **This
+  binds composition / aggregation layers too, not just the `*-forensic` layer:**
+  `forensic-vfs-engine` (which pulls every container + filesystem reader) and `disk-forensic`
+  (which aggregates every logical + physical container) are **capability-carrying layers** — they
+  take whatever MSRV full coverage needs, and their `open`/`open_all` must surface **every**
+  supported container/format, never a reduced subset. The low-MSRV floor is preserved **only** in
+  the **contract crate** (`forensic-vfs`, traits-only) and the lean `*-core` readers — never by
+  dropping a format from the engine. (Lived case: proposing to defer **AFF4-Logical** out of
+  `forensic-vfs-engine` to keep it at Rust 1.88 was wrong — the engine surfaces *all* container
+  types as browsable filesystems and takes the bump to disk-forensic's true floor; the low-MSRV
+  promise lives in `forensic-vfs` + the readers, not in a capability-reduced engine.)
 - **Exception (the only one):** a genuinely optional, *rarely-wanted* heavy subsystem MAY be a
   named non-default feature **as long as the shipping binary turns it on**. The library's
   `default` may stay lean for third-party reuse, but every fleet binary that links it builds
