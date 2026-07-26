@@ -50,7 +50,7 @@ Per-folder rationale and membership:
 | `memory/` | Navigate a physical page stream by virtual address. | memory-forensic |
 | `vfs/` | The format-agnostic open-any-image / mount abstraction. | forensic-vfs, forensic-vfs-engine, forensic-vfs-mount, 4n6mount, disk-forensic |
 | `log/` | Navigate a log stream by timestamp / record number. | winevt-forensic, journald-forensic |
-| `parser/` | Medium-agnostic artifact interpreters (`Path`/`&[u8]` in → findings out), incl. shared binary-structure deserializers/decoders. | browser-forensic, winreg-forensic, srum-forensic, prefetch-forensic, lnk-forensic, amcache-forensic, shimcache-forensic, userassist-forensic, bam-forensic, peripheral-forensic, bluetooth-forensic, atx-forensic, snss-forensic, sqlite-forensic, ese-forensic, exec-pe-forensic, segb-forensic, protobuf-forensic, blob-decoder, shellitem, cfb-forensic, trash-forensic, shellhist-forensic, leveldb-forensic, useract-forensic, usb-forensic |
+| `parser/` | Medium-agnostic artifact interpreters (`Path`/`&[u8]` in → findings out), incl. shared binary-structure deserializers/decoders. | browser-forensic, winreg-forensic, srum-forensic, prefetch-forensic, lnk-forensic, amcache-forensic, shimcache-forensic, userassist-forensic, bam-forensic, peripheral-forensic, bluetooth-forensic, atx-forensic, snss-forensic, sqlite-forensic, ese-forensic, exec-pe-forensic, segb-forensic, protobuf-forensic, blob-decoder, shellitem, cfb-forensic, trash-forensic, shellhist-forensic, leveldb-forensic, usb-forensic |
 | `graph/` | Content-addressed / Merkle-DAG navigation. | git-forensic *(cas-forensic, sigstore-forensic — planned, no repo yet)* |
 | `acquisition/` | Live-host edge — enumerate the running machine's physical disks and grade acquisition integrity. | livedisk-forensic *(RapidCollect returns here after its rewrite)* |
 | `history/` | The whole `[H]` state-history domain — both the zero-dep `[H]` trait **vocabulary** (state-history-forensic) AND the concrete `[H]` **readers** (vsc-forensic, snapshot-forensic) that depend down on it. Groups the domain the way `vfs/` groups the VFS contract + engine + mount + readers. | state-history-forensic, vsc-forensic, snapshot-forensic |
@@ -58,7 +58,7 @@ Per-folder rationale and membership:
 
 *`volume/` dropped — empty after vsc-forensic → `history/`; no placeholder kept. A future LVM reader would fold into `partition/` or reintroduce its own folder then.*
 
-**Present fleet repos assigned: 84.** Counts by folder: knowledge 2 · utility 6 · compression 3 ·
+**Present fleet repos assigned: 84.** Counts by folder: knowledge 2 · utility 7 · compression 3 · archive 4 · container 7 · partition 3 · encryption 6 · filesystem 12 · memory 1 · vfs 5 · log 2 · parser 25 · graph 1 · acquisition 1 · history 3 · orchestration 2
 archive 4 · container 8 · partition 3 · encryption 6 · filesystem 12 · memory 1 · vfs 5 ·
 log 2 · parser 26 · graph 1 · acquisition 1 · history 3 · orchestration 1. (`cas-forensic` and
 `sigstore-forensic` are named in the architecture but have no `~/src` repo yet — listed as
@@ -220,6 +220,7 @@ repos with a real cross-repo *path/patch* pin are flagged; everything else is mo
 | repo | movable-now? | notes |
 |---|---|---|
 | issen | ✅ | the single fleet-wiring capstone; consumes registry deps, not paths |
+| useract-forensic | ✅ | user-activity correlation — merges shell-history + peripheral + Biome events into one per-user timeline (**moved from parser/**: it correlates across sources, not a medium-agnostic parser) |
 
 ---
 
