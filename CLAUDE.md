@@ -29,7 +29,7 @@ VFS abstraction: [ADR-0011](docs/decisions/0011-vfs-universal-container-abstract
 Canonical vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Layers** (dependencies flow down toward FOUNDATION; a repo may span several):
-FOUNDATION (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf,
+FOUNDATION (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf-forensic,
 vhdx, dd, segb-core, memf-format) → FILESYSTEM (ext4fs-forensic, 4n6mount) / PAGING
 (memf-hw) / OS STRUCTURE (memf-windows) / LOG FORMAT (winevt-forensic) / QUERY ENGINE
 (issen-remote-access, velociraptor-parser) / GRAPH NAV (cas/git/sigstore-forensic) →
@@ -272,7 +272,10 @@ all published via one release PR.
 
 **Discipline & gotchas (all lived on the forensicnomicon cut):**
 - **Conventional-commit types drive the bump** — `feat`→minor, `fix`→patch, breaking→major; `test`/
-  `chore`/`docs`-only work rides along without cutting a release.
+  `chore`/`docs`-only work rides along without cutting a release. **A security fix uses
+  `fix(security):`** (a `fix` with a `security` scope) so it cuts a patch release — NEVER a bare
+  `security:` type, which `release_commits` (`^(feat|fix|perf|refactor|doc|revert)`) does not match,
+  silently stranding the fix on `main` unpublished (lived case: the RUSTSEC-2026-0190 `anyhow` bumps).
 - **Merge the release PR with a MERGE commit, NOT squash** — squash rewrites the version-bump commit
   release-plz keys on.
 - **An API-changing `feat` must regenerate the `public-api/*.txt` baseline in the SAME release**, or the
