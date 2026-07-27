@@ -40,7 +40,7 @@ tiers collapse the dependency DAG and align to the architecture layers in
 `xpress-huffman` · `elephant-diffuser`
 
 ### Tier 1 — CONTAINER readers & crypto layers (depend on Tier 0)
-Containers: `ewf` · `vmdk` · `vhdx` · `qcow2` · `aff4-forensic` · `ad1-forensic` ·
+Containers: `ewf-forensic` · `vmdk` · `vhdx` · `qcow2` · `aff4-forensic` · `ad1-forensic` ·
 `dmg` · `dd` · `iso9660-forensic` · `udf-forensic` · `zip-forensic` · `dar-forensic` ·
 `cfb-forensic` · `archive-forensic` · `livedisk-forensic` · `segb-core` ·
 `memf-format`. Crypto layers: `dpapi-forensic` · `bitlocker-forensic` ·

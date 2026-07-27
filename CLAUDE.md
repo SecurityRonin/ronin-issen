@@ -29,7 +29,7 @@ VFS abstraction: [ADR-0011](docs/decisions/0011-vfs-universal-container-abstract
 Canonical vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Layers** (dependencies flow down toward FOUNDATION; a repo may span several):
-FOUNDATION (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf,
+FOUNDATION (forensicnomicon, state-history-forensic, jsonguard) → CONTAINER (ewf-forensic,
 vhdx, dd, segb-core, memf-format) → FILESYSTEM (ext4fs-forensic, 4n6mount) / PAGING
 (memf-hw) / OS STRUCTURE (memf-windows) / LOG FORMAT (winevt-forensic) / QUERY ENGINE
 (issen-remote-access, velociraptor-parser) / GRAPH NAV (cas/git/sigstore-forensic) →
