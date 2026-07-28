@@ -979,6 +979,45 @@ link key). The `devices_from_hive` seam is validated over a **synthetic** REGF
 
 ---
 
+### D15 · whatsapp-desktop-forensic — `tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/` (committed, ~6.3 KB) · REAL-self ✓ · **T2** (real Chrome/V8 engine output in WhatsApp Web's documented schema; ground truth from the documented IndexedDB writes)
+
+A **real Chromium-authored** IndexedDB `model-storage` store minted by driving
+Google Chrome 150.0.7871.187 (macOS aarch64, headless) to a page that writes the
+WhatsApp Web schema (object stores `message`/`chat`/`contact`, keyPath `id`). The
+bytes are real Chrome/V8 output; the ground truth is the documented writes: a text
+message with an AES-CBC-encrypted body (`msgRowOpaqueData:{_keyId,iv,_data}`), an
+image message with media fields (`mimetype`/`filehash`/`mediaKey`/`directPath`/
+`size`/`width`/`height`), a `put`→`delete`d message leaving a recoverable
+tombstone, plus one `chat` and one `contact` row. Schema authority: Mazzoli
+(<https://mazzo.li/posts/whatsapp-backup.html>) + MDPI *Future Internet* 12(11):184
+(<https://www.mdpi.com/1999-5903/12/11/184>).
+
+- Consumed by `whatsapp-desktop-core/tests/{message,media,chat,contact,store}.rs`
+  and `whatsapp-desktop-forensic/tests/audit.rs`. This is **not** a real message
+  corpus (none was available — the host's WhatsApp is the native macOS SQLite
+  client); the extraction path's ceiling is T2. See
+  `components/parser/whatsapp-desktop-forensic/docs/validation.md`.
+- Files: `CURRENT` (16 B) + `MANIFEST-000001` (23 B) + `000003.log` (6215 B). No
+  `.ldb` SSTable — the small dataset stayed in the WAL. `LOCK`/`LOG` excluded.
+- **Verbatim generator** (needs Google Chrome/Chromium + `python3`):
+  ```
+  components/parser/whatsapp-desktop-forensic/scripts/mint/mint.sh
+  ```
+  Serves the committed `scripts/mint/index.html` (single source of truth for the
+  writes) on `127.0.0.1:8731`, drives headless Chrome with a throwaway profile,
+  SIGTERMs it to flush the LevelDB, copies the store out. Decoded records are
+  stable across runs; raw bytes (sequence numbers, file names) are not, so tests
+  assert on decoded content. MD5 (this mint): `000003.log`
+  `6fd64ebd0191eaec3d2acc75da0dbcf9`, `CURRENT` `46295cac801e5d4857d09837238a6394`,
+  `MANIFEST-000001` `3fd11ff447c1ee23538dc4d9724427a3`.
+- Redistribution: synthetic writes to a loopback origin, no third-party/personal
+  data — freely redistributable. Per-file provenance:
+  `components/parser/whatsapp-desktop-forensic/tests/data/README.md`.
+- The crypto path (`decrypt_body`, AES-CBC) is validated separately at **T1**
+  against independent openssl KAT vectors — not from this store.
+
+---
+
 ## E. issen-internal & misc
 
 - `issen/crates/issen-dd/tests/data/ext4.raw` (4 MB) · **REAL-ext** — downloaded from log2timeline
