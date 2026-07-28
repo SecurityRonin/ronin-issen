@@ -1072,5 +1072,24 @@ so these are recorded here. Verify a download with `md5 <file>` (macOS) / `md5su
 | `leveldb-forensic/tests/data/chromium-local-storage/leveldb/000003.log` (committed, §D13) | 319 | `7259318b8db2a78a96f2b32e257d9e97` |
 | `leveldb-forensic/tests/data/chromium-local-storage/leveldb/CURRENT` (committed, §D13) | 16 | `46295cac801e5d4857d09837238a6394` |
 | `leveldb-forensic/tests/data/chromium-local-storage/leveldb/MANIFEST-000001` (committed, §D13) | 41 | `5af87dfd673ba2115e2fcf5cfdb727ab` |
+| `chromium-storage-forensic/tests/data/local-storage/leveldb/000003.log` (committed, §D14) | 243 | `c615e82a28579922d3d0caa1fdc176d1` |
+| `chromium-storage-forensic/tests/data/local-storage/leveldb/CURRENT` (committed, §D14) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `chromium-storage-forensic/tests/data/local-storage/leveldb/MANIFEST-000001` (committed, §D14) | 41 | `5af87dfd673ba2115e2fcf5cfdb727ab` |
+| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/000003.log` (committed, §D14) | 1360 | `dd48c7a058efaa2e81490f4629dd6b01` |
+| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/CURRENT` (committed, §D14) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/MANIFEST-000001` (committed, §D14) | 23 | `3fd11ff447c1ee23538dc4d9724427a3` |
+| `chromium-storage-forensic/tests/data/simple-cache/ea2e47cbdc22305e_0` (committed, §D14) | 449 | `58a8001d87b2d970be5e5d4293896f4e` |
+| `chromium-storage-forensic/tests/data/simple-cache/d9c2c72a2ec24e84_0` (committed, §D14) | 4853 | `34c8262922bc9d8ddd1f5a7d9ef3ff0c` |
+
+### §D14 — chromium-storage-forensic (Simple Cache + IndexedDB + Local Storage), **T2**, REAL-self
+
+Real Chromium storage minted on-host by driving headless Google Chrome against a local
+cacheable page, then copying the profile's `Local Storage/leveldb`,
+`IndexedDB/*.indexeddb.leveldb`, and `Cache/Cache_Data` dirs. Known writes are the oracle:
+localStorage `greeting=hello` + `mint_ls_key=mint_ls_value_δ`; IndexedDB `mintdb`/`notes`
+`put({title:'first note',n:42,tags:['a','b']},'note-1')`; a cached resource with body
+`CACHED-CONTENT-MARKER-9427`. Full mint command + flags in
+`components/parser/chromium-storage-forensic/tests/data/README.md`. Confidence: ✓ (verified —
+tests decode the known writes).
 
 (The inner `…-235706.dmp` carries its own published SHA256 — see §A6.)
