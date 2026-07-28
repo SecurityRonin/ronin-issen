@@ -19,6 +19,7 @@ here, by design — this is deliberately *not* a monorepo (see [`REORG.md`](REOR
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | **The fleet constitution.** Layer hierarchy, crate naming, the reader/analyzer (`core`/`forensic`) split, the Paranoid-Gatekeeper security standard, and the README / corpus / validation / **release & Windows code-signing** / secrets / distribution standards. Every component inherits it (via `@import`, and parent-dir loading once repos move under `components/`). |
 | [`REORG.md`](REORG.md) | The `components/` reorganization taxonomy + decisions. |
+| [`docs/components-diagram.html`](docs/components-diagram.html) | Rendered component layout — tier flow (evidence → timeline) + the cross-cutting rail. Self-contained dark-theme SVG; open locally in any browser. |
 | `docs/` | Fleet-wide reference (corpus catalog, etc.). |
 | `components/`, `_deprecated/` | The actual fleet repos — **separate gits, never tracked here** (gitignored). |
 
