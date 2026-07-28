@@ -26,6 +26,12 @@ here, by design — this is deliberately *not* a monorepo
 
 ## Component layout (canonical)
 
+<p align="center">
+  <img src="assets/components-diagram.svg" alt="ronin-issen fleet component layout — tier flow from evidence to timeline" width="960" />
+</p>
+
+_Rendered with the architecture-diagram skill; the interactive version is [`docs/components-diagram.html`](docs/components-diagram.html)._
+
 `components/<category>/<repo>` — **86 repos, 16 folders**. The component tree is the
 registry; this table is its canonical statement. Categories group by the **proximity
 rule**: same conceptual idea → same folder; contract crates live with their families;
