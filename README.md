@@ -56,7 +56,10 @@ These folders govern **where a human looks**. The conceptual dependency **tiers*
 (FOUNDATION → CONTAINER → … → ORCHESTRATION — [ADR-0016](docs/decisions/0016-multi-repo-layer-architecture.md))
 govern **what may import what**; the bottom-up **publish order** that graph forces is
 its corollary ([ADR-0006](docs/decisions/0006-fleet-dependency-layering-release-order.md)).
-Folders and tiers are related, deliberately not identical.
+Related but not 1:1 — the **16 folders collapse onto 5 dependency tiers** (e.g. `knowledge/`,
+`utility/`, and `codec/` are three folders but one zero-dep tier; `utility`/`codec` are
+cross-cutting rails depended on from every tier, not a rung). A folder is chosen by *what a
+repo is*; its tier is *derived from what it imports*.
 
 ## Why this repo doesn't wear the product-README standard
 

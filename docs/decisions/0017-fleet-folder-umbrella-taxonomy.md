@@ -33,7 +33,10 @@ reorg has shipped and those plan artifacts are archived to git history.
   **folders govern where a human looks**; the conceptual dependency **tiers**
   (FOUNDATION → CONTAINER → … → ORCHESTRATION, ADR-0016) govern **what may import
   what**, and the bottom-up **publish order** that graph forces is its corollary
-  (ADR-0006). Folders and tiers are related, deliberately not identical.
+  (ADR-0006). Related but not 1:1 — the 16 folders collapse onto ADR-0006's 5
+  dependency tiers (e.g. `knowledge/` + `utility/` + `codec/` are three folders but
+  one zero-dep Tier 0; `utility`/`codec` are cross-cutting rails, not a rung). A
+  folder is chosen by *what a repo is*; its tier is *derived from what it imports*.
 - **Reserved-not-created categories** (no empty dirs): `os-structure`
   (memf-windows/-linux live inside `memory-forensic`) and `query`
   (issen-remote-access/velociraptor-parser live inside `issen`) — created the day
