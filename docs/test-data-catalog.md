@@ -905,6 +905,38 @@ systemd journal (`.journal`) forensic reader. Three provenance classes:
   (see `journald-forensic/docs/validation.md`). Fuzz confirmed: 1.45M execs / 91s, zero crashes.
 - MD5: `classic-system.journal` cb1b9af3366d6d3e4f1470e3c7d203a4.
 
+### D13 · leveldb-forensic — `tests/data/chromium-local-storage/leveldb/` (committed, 376 B) · REAL-self ✓ · **T2** (real Chrome engine output; ground truth from documented `localStorage.setItem` writes)
+
+A **real Chromium-authored** Local Storage `leveldb` store minted by driving
+Google Chrome 150.0.7871.187 (macOS aarch64, headless) to a page that runs four
+known `localStorage.setItem` writes under origin `http://127.0.0.1:8117`. The
+bytes are real Chrome output; the ground truth is the four documented writes:
+`case_id=CASE-001`, `greeting=Hello, forensics!`, `count=42` (all Latin-1,
+prefix `0x01`), and `unicode=日本語 café ☕` (UTF-16-LE, prefix `0x00`). Chrome
+also emits the origin `META:` record (WebKit-µs timestamp + size) and a
+`VERSION` key — both surface via the decoder.
+
+- Consumed by `leveldb-forensic/tests/real_chromium_local_storage.rs`
+  (`decode_local_storage` over the committed dir; asserts each write + META).
+  This is the tier-1/2 real-profile follow-up called out in
+  `components/parser/leveldb-forensic/docs/validation.md`.
+- Files: `CURRENT` (16 B) + `MANIFEST-000001` (41 B) + `000003.log` (319 B). No
+  `.ldb` SSTable — the small dataset stayed in the WAL. `LOCK`/`LOG` excluded
+  (Chrome-runtime-only).
+- **Verbatim generator** (needs Google Chrome/Chromium + `python3`):
+  ```
+  components/parser/leveldb-forensic/tests/data/chromium-local-storage/mint.sh
+  ```
+  Serves the committed `mint.html` (single source of truth for the four writes)
+  on `127.0.0.1:8117`, drives headless Chrome with a throwaway profile, gracefully
+  shuts it down (flushing the LocalStorage commit timer), copies the store files
+  out. Only the `META:` timestamp varies per run (real wall-clock); the test
+  asserts exact equality for the four writes and a plausible range for the
+  timestamp.
+- Redistribution: synthetic writes to a loopback origin, no third-party/personal
+  data — freely redistributable. Per-file provenance:
+  `components/parser/leveldb-forensic/tests/data/README.md`.
+
 ---
 
 ## E. issen-internal & misc
@@ -997,5 +1029,8 @@ so these are recorded here. Verify a download with `md5 <file>` (macOS) / `md5su
 | `udf-forensic/tests/data/udf_vat.img` (committed, §B9) | 8388608 | `1258d2b17f095af79bdb1141059eac84` |
 | `udf-forensic/tests/data/udf_spar.img` (committed, §B9) | 8388608 | `70285bf8979a026380517bfc48ae6ee6` |
 | `udf-forensic/tests/data/udf_plain.img` (committed, §B9) | 8388608 | `31d06a9942f8bc4983617631a9ac4e30` |
+| `leveldb-forensic/tests/data/chromium-local-storage/leveldb/000003.log` (committed, §D13) | 319 | `7259318b8db2a78a96f2b32e257d9e97` |
+| `leveldb-forensic/tests/data/chromium-local-storage/leveldb/CURRENT` (committed, §D13) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `leveldb-forensic/tests/data/chromium-local-storage/leveldb/MANIFEST-000001` (committed, §D13) | 41 | `5af87dfd673ba2115e2fcf5cfdb727ab` |
 
 (The inner `…-235706.dmp` carries its own published SHA256 — see §A6.)
