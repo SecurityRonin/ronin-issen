@@ -119,6 +119,7 @@ recorded HEAD = done).
 
 | Prior-plan assumption | Reality now (verified 2026-07-18) |
 |---|---|
+| 2026-07-23: taxonomy had `compression/`, a `vfs/` folder, and `ad1-forensic` in `archive/` | Rulings 2026-07-28: `compression/` → **`codec/`**; the **`vfs/` folder is dissolved** — `forensic-vfs`/`-engine`/`-mount`/`4n6mount` in `filesystem/`, `disk-forensic` in `orchestration/`; **`ad1-forensic` is `container/`** (raw-disk logical container). Map is `.migration/map.tsv` (86 repos, 16 folders). |
 | 2026-06-29: "consolidate into one monorepo, merge histories" | Overruled by user 2026-07-04: folder umbrella, repos stay separate. This design keeps that decision. The monorepo's real motivation — the fn-1.0 publish pain (~70 manual publishes, topological ordering, stale-caret traps, local-ahead strands) — is answered instead by **release-plz on every repo** (now the binding fleet standard), which delivers coordinated, reviewed releases without a history merge. |
 | 2026-07-04: umbrella root = `~/src/issen` (name-collision swap via `.issen-umbrella`) | Root = `~/src/ronin-issen`; no collision, no swap step. |
 | 2026-07-04: ~55 repos, 13 categories (mount/, history/, util/, no archive/encryption) | ~89 movable repos; taxonomy now has `archive`, `encryption`, `volume`, `state-history`, `tooling`; forensic-vfs split into contract (`forensic-vfs`) + `forensic-vfs-engine` + `forensic-vfs-mount`; FDE suite (bitlocker/luks/filevault/veracrypt) and ~10 new FS/parser repos exist. |

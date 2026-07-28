@@ -1,3 +1,10 @@
+<p align="center">
+  <img src="assets/issen-banner.png#gh-dark-mode-only"
+       alt="ronin-issen — SecurityRonin forensic-fleet umbrella" width="640" />
+  <img src="assets/issen-banner-light.png#gh-light-mode-only"
+       alt="ronin-issen — SecurityRonin forensic-fleet umbrella" width="640" />
+</p>
+
 # ronin-issen — SecurityRonin forensic-fleet umbrella
 
 **Governance root for the SecurityRonin forensic fleet.** This is a **docs-only** repo:

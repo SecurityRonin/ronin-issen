@@ -58,7 +58,9 @@ Per-folder rationale and membership:
 
 *`volume/` dropped — empty after vsc-forensic → `history/`; no placeholder kept. A future LVM reader would fold into `partition/` or reintroduce its own folder then.*
 
-**Present fleet repos assigned: 84.** Counts by folder: knowledge 2 · utility 7 · compression 3 · archive 4 · container 7 · partition 3 · encryption 6 · filesystem 12 · memory 1 · vfs 5 · log 2 · parser 25 · graph 1 · acquisition 1 · history 3 · orchestration 2
+**Present fleet repos assigned: 86.** Counts by folder: knowledge 2 · utility 7 · codec 3 · archive 3 · container 8 · partition 3 · encryption 6 · filesystem 16 · memory 1 · log 2 · parser 25 · graph 1 · acquisition 1 · history 3 · orchestration 3
+
+*Taxonomy rulings (2026-07-28): `compression/` → `codec/`; the `vfs/` folder is dissolved — `forensic-vfs` + `-engine` + `-mount` + `4n6mount` live in `filesystem/`, `disk-forensic` in `orchestration/`; `ad1-forensic` is `container/` (a raw-disk logical container), not `archive/`.*
 archive 4 · container 8 · partition 3 · encryption 6 · filesystem 12 · memory 1 · vfs 5 ·
 log 2 · parser 26 · graph 1 · acquisition 1 · history 3 · orchestration 1. (`cas-forensic` and
 `sigstore-forensic` are named in the architecture but have no `~/src` repo yet — listed as
