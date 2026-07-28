@@ -937,6 +937,35 @@ also emits the origin `META:` record (WebKit-µs timestamp + size) and a
   data — freely redistributable. Per-file provenance:
   `components/parser/leveldb-forensic/tests/data/README.md`.
 
+### D14 · bluetooth-forensic — `BTHPORT` `SYSTEM`-hive walk · SYNTHETIC (not committed) · **T2** (regipy independent-oracle differential; tier-1 positive operator-supplied/pending)
+
+Windows Bluetooth pairing forensics (`SYSTEM\…\BTHPORT\Parameters\{Devices,Keys}` →
+paired device MAC / friendly `Name` / `LastSeen`/`LastConnected` / stored classic
+link key). The `devices_from_hive` seam is validated over a **synthetic** REGF
+`SYSTEM` hive built byte-by-byte at test time — no image is committed.
+- **Generator (no external command):**
+  `components/parser/bluetooth-forensic/forensic/tests/common/mod.rs::build_system_hive`
+  — a minimal valid REGF v1.5 hive with two devices under `ControlSet001`
+  (`AA:BB:CC:DD:EE:FF` "Sony WH-1000XM4" + REG_SZ name + both FILETIMEs + a stored
+  link key; `00:1A:7D:DA:71:13` "Mouse" + REG_BINARY name + no timestamps) plus a
+  non-MAC `NotAMacSubkey` that `parse_mac` rejects.
+- **Independent oracle (T2):** the same bytes are re-parsed by **regipy** (third-party
+  REGF parser) via
+  `components/parser/bluetooth-forensic/scripts/bthport_oracle.py` and reconciled
+  field-by-field in `forensic/tests/hive_seam_oracle.rs` (skip-when-absent: no
+  `python3`/`regipy` → SKIP + pass). Building it caught a real fixture infidelity
+  (root `nk` emitted last, not as the first hbin cell) that regipy — which finds the
+  root by first-cell — surfaced.
+- **Tier-1 positive — pending, operator-supplied.** No public `SYSTEM` hive with
+  Bluetooth pairings exists (the 2018 Lone Wolf hive above has the BTHPORT stack + a
+  host adapter but **zero** paired devices), and one cannot be minted on macOS or a
+  cloud VM (no BT radio). Mint procedure:
+  `components/parser/bluetooth-forensic/scripts/mint-bt-hive.md` (pair a classic BT
+  device on a live Windows box → `reg save HKLM\SYSTEM` → reconcile against the regipy
+  oracle and RegRipper `bthport.pl`). Real-hive tests are env-gated on
+  `BLUETOOTH_TEST_SYSTEM_HIVE`. Per-file provenance:
+  `components/parser/bluetooth-forensic/core/tests/data/README.md`.
+
 ---
 
 ## E. issen-internal & misc
