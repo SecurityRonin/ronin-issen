@@ -7,9 +7,10 @@
 
 # ronin-issen — the SecurityRonin forensic fleet
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Fleet](https://img.shields.io/badge/fleet-86_pure--Rust_DFIR_libraries-blue.svg)](#component-layout-canonical)
 [![Get Issen](https://img.shields.io/badge/get-Issen-brightgreen.svg)](https://github.com/SecurityRonin/issen)
+[![Platform](https://img.shields.io/badge/platform-Windows_%7C_macOS_%7C_Linux-lightgrey.svg)](https://github.com/SecurityRonin/issen/releases)
+[![Fleet](https://img.shields.io/badge/fleet-86_pure--Rust_DFIR_libraries-blue.svg)](#component-layout-canonical)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/sponsor-h4x0r-ea4aaa?logo=github-sponsors)](https://github.com/sponsors/h4x0r)
 
 **The image is acquired. The clock is running. Point Issen at it and read the story.**
