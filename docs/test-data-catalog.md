@@ -869,6 +869,42 @@ DFIR Madness "Stolen Szechuan Sauce" DC01 image (provenance below; per-file deta
   `9b9cdc69c1c24e2b.automaticDestinations-ms` 18b8fe1fee7120db495c5a6aba947533 ·
   `28c8b86deab549a1.customDestinations-ms` a4af29faae0cdfd56fe2295611d54488.
 
+### D12 · journald-forensic — `tests/data/` + mint procedure + fuzz · MIXED: REAL-self journal (T1) + SYNTHETIC malformed buffers (T3) · **T1** (journalctl differential oracle; mixed: also T3 — in-code robustness buffers)
+systemd journal (`.journal`) forensic reader. Three provenance classes:
+- **`classic-system.journal`** (524288 B, committed) · **REAL-self** ✓ · **T1**. Real
+  `systemd-journald` output (systemd 239, RHEL 8) produced as PID 1 in a
+  `registry.access.redhat.com/ubi8/ubi-init` container under Podman: 21 messages logged via
+  `logger -t jdtest`, then `journalctl --sync && --flush`, and
+  `/var/log/journal/<machine-id>/system.journal` copied out. **systemd 239 chosen** because v252+
+  writes the COMPACT + KEYED_HASH layout the reader does not yet decode; 239 predates both (classic
+  layout, `Incompatible Flags: <none>`). **Oracle = `journalctl`** (systemd decoding its own format):
+  `crates/journald-binary/tests/journalctl_oracle.rs` reconciles `parse_entries` against
+  `journalctl --file <f> -o json` — entry count + a MESSAGE/SYSLOG_IDENTIFIER/_PID/PRIORITY/_COMM
+  field sample. Confirmed in a Linux container with real journalctl: **30 entries reconciled**
+  (`journalctl --header`: 30 Entry Objects; machine-id `e7d87b83baf96ba14eb77adc0a769ed2`). The
+  end-to-end oracle test is **env-gated** (`JOURNALD_TEST_CORPUS` + `journalctl` on PATH), skips
+  cleanly otherwise; the pure reconciliation helpers are unit-tested unconditionally.
+  Redistribution: only fixture log lines + journald housekeeping — freely redistributable.
+- **Mint procedure — `scripts/mint-journal.sh`** · **REAL-self** (operator-run on Linux/systemd;
+  ground truth documented, not committed). Verbatim generator:
+  ```
+  scripts/mint-journal.sh [OUTPUT_PATH]   # logs jd4n6-mint events (logger -p user.info/user.err
+                                          # + systemd-cat), journalctl --sync/--flush, copies
+                                          # /var/log/journal/<machine-id>/system.journal, writes
+                                          # OUTPUT_PATH.truth.txt (md5/sha256, incompat-flags,
+                                          # journalctl entry count, exact messages logged)
+  ```
+  For a classic-format (reader-parseable) file, run it inside a systemd-239 container (recipe in the
+  script header — same provenance as `classic-system.journal`). Minted journals are consumed via the
+  env-gated oracle test, not committed.
+- **Malformed-input hardening** · **SYNTHETIC** ✓ · **T3** (no external oracle; robustness property).
+  `crates/journald-binary/tests/malformed_input.rs` (byte-exact in-source buffers: truncated /
+  oversized / all-0xFF / LCG-garbage / extreme-size / boundary-offset / self-referential) + the
+  `fuzz_parse_entries` cargo-fuzz target (`fuzz/`). Invariant: never panic. **No systemd LGPL fuzz
+  seeds committed** — the repo is Apache-2.0, so seeds are synthetic to keep the tree license-clean
+  (see `journald-forensic/docs/validation.md`). Fuzz confirmed: 1.45M execs / 91s, zero crashes.
+- MD5: `classic-system.journal` cb1b9af3366d6d3e4f1470e3c7d203a4.
+
 ---
 
 ## E. issen-internal & misc
