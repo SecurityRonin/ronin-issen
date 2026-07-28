@@ -31,8 +31,9 @@ reorg has shipped and those plan artifacts are archived to git history.
   contract crates live with their families (e.g. `forensic-vfs` with its engine +
   mount in `filesystem/`); sub-groups get a label in the table, not a folder. The
   **folders govern where a human looks**; the conceptual dependency **tiers**
-  (FOUNDATION → CONTAINER → … → ORCHESTRATION, ADR-0016) govern dependency
-  direction and release order (ADR-0006). Related, deliberately not identical.
+  (FOUNDATION → CONTAINER → … → ORCHESTRATION, ADR-0016) govern **what may import
+  what**, and the bottom-up **publish order** that graph forces is its corollary
+  (ADR-0006). Folders and tiers are related, deliberately not identical.
 - **Reserved-not-created categories** (no empty dirs): `os-structure`
   (memf-windows/-linux live inside `memory-forensic`) and `query`
   (issen-remote-access/velociraptor-parser live inside `issen`) — created the day
