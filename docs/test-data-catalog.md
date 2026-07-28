@@ -215,6 +215,17 @@ cargo run --release --example extract_amcache  -- "$E01" tests/data/case001-hive
 | `UsrClass.dat` (ricksanchez — Win10 per-user COM CLSID) | 3407872 | `5e28f59f5414e754b4e6e4868fa9d7a0` |
 | `Amcache.hve` (`Windows\AppCompat\Programs\`, program execution) | 1572864 | `0512afeba75e21c724fa75a365bb81d1` |
 
+`UsrClass-ricksanchez.dat` also backs **peripheral-forensic**'s shellbag `BagMRU`
+differential (`peripheral-forensic/core/tests/shellbag_oracle_diff.rs`, env-gated on
+`SHELLBAG_TEST_HIVE`): its `BagMRU` records drives **Z:** (`My Computer\Z:\`) and **E:**
+(`E:\`, with `E:\FTK Imager` browsed on it). **Independent oracle = regipy + libyal
+pyfwsi (libfwsi)** — `pip install 'regipy[full]'`; the bundled
+`core/tests/oracle/shellbags_oracle.py` decodes the same tree and the test reconciles
+drive letters + path. **T1.** Our walk's `Z:` is confirmed by libfwsi; `E:` is a documented
+gap (a delegate-wrapped volume item the `shellitem` primitive does not yet decode — see
+`peripheral-forensic/docs/validation.md`). Run:
+`SHELLBAG_TEST_HIVE=/tmp/case001-hives/UsrClass-ricksanchez.dat cargo test -p peripheral-core --test shellbag_oracle_diff -- --nocapture`.
+
 The `SECURITY` hive's `Policy\Secrets` **is** present (`$MACHINE.ACC`/`DPAPI_SYSTEM`/`NL$KM`) and now
 backs `issen-parser-lsasecrets/tests/real_hive_category.rs` (AccountActivity, T1003.004).
 
