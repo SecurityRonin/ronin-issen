@@ -1,43 +1,74 @@
 <p align="center">
   <img src="assets/issen-banner.png#gh-dark-mode-only"
-       alt="ronin-issen — SecurityRonin forensic-fleet umbrella" width="640" />
+       alt="Issen — push-button forensics for the case on your desk" width="640" />
   <img src="assets/issen-banner-light.png#gh-light-mode-only"
-       alt="ronin-issen — SecurityRonin forensic-fleet umbrella" width="640" />
+       alt="Issen — push-button forensics for the case on your desk" width="640" />
 </p>
 
-# ronin-issen — SecurityRonin forensic-fleet umbrella
+# ronin-issen — the SecurityRonin forensic fleet
 
-**Governance root for the SecurityRonin forensic fleet.** This is a **docs-only** repo:
-it holds the fleet *constitution* and the canonical component layout — not code. Component
-repos (parsers, container readers, the `*4n6` CLIs, the issen capstone, …) live under
-`components/<category>/<repo>` as their **own independent git repos** and are gitignored
-here, by design — this is deliberately *not* a monorepo
-([ADR-0017](docs/decisions/0017-fleet-folder-umbrella-taxonomy.md)).
+**The image is acquired. The clock is running. Point Issen at it and read the story.**
 
-## What's here
+Hand **Issen** a disk image and a memory dump and it hands back one correlated,
+ATT&CK-mapped timeline — the attack narrative, ready to read and drop into a report.
+One command. One static binary. No Python, no dependency hell.
 
-| Path | What it is |
-|---|---|
-| [`CLAUDE.md`](CLAUDE.md) | **The fleet constitution.** Layer hierarchy, crate naming, the reader/analyzer (`core`/`forensic`) split, the Paranoid-Gatekeeper security standard, and the README / corpus / validation / **release & Windows code-signing** / secrets / distribution standards. Every component inherits it. |
-| [`docs/decisions/`](docs/decisions/) | Fleet-level ADRs — the folder umbrella + taxonomy ([ADR-0017](docs/decisions/0017-fleet-folder-umbrella-taxonomy.md)), the conceptual layer architecture ([ADR-0016](docs/decisions/0016-multi-repo-layer-architecture.md)), release order ([ADR-0006](docs/decisions/0006-fleet-dependency-layering-release-order.md)), and more. |
-| [`docs/components-diagram.html`](docs/components-diagram.html) | Rendered component layout — tier flow (evidence → timeline) + the cross-cutting rail. Self-contained dark-theme SVG; open locally in any browser. |
-| `docs/` | Fleet-wide reference (glossary, test-data catalog, release SOP). |
-| `components/`, `_deprecated/` | The actual fleet repos — **separate gits, never tracked here** (gitignored). |
+```bash
+# Ingest disk + memory, auto-detect the container, parse every artifact, correlate.
+issen evidence.E01 memory.raw -o case.duckdb
 
-## Component layout (canonical)
+# Read the story — as text, or a shareable HTML report.
+issen report case.duckdb --format text
+```
+
+That is the whole workflow. Issen auto-detects E01/EWF/VMDK/raw and memory dumps,
+triages the filesystem for the artifacts that matter — registry, EVTX, prefetch,
+browser, LNK, SRUM, shell history, Biome — parses each, and correlates across disk,
+memory, logs, live response, and supply chain into one queryable timeline. Re-run it
+and it only re-parses what changed: a crash, a new source, or a repeat run picks up
+where it stopped instead of redoing the case.
+
+**Try it on the case already on your desk.** → Get Issen: **[SecurityRonin/issen](https://github.com/SecurityRonin/issen)**
+
+---
+
+## What you get
+
+- **One timeline across five kinds of evidence** — disk `[P]`, memory `[M]`, logs `[L]`,
+  live query `[Q]`, and content-addressed supply chain `[C]`.
+- **Findings with the full chain, not loose facts.** A network connection, a hidden PID,
+  a loaded rootkit library, and a supply-chain hash match arrive as one story — with
+  severity, rule name, and the evidence behind each.
+- **Output you can hand off** — plain text for a quick read, HTML for a shareable report.
 
 <p align="center">
-  <img src="assets/components-diagram.svg" alt="ronin-issen fleet component layout — tier flow from evidence to timeline" width="960" />
+  <img src="assets/components-diagram.svg" alt="SecurityRonin forensic fleet — tier flow from evidence to timeline" width="960" />
 </p>
 
-_Rendered with the architecture-diagram skill; the interactive version is [`docs/components-diagram.html`](docs/components-diagram.html)._
+---
+
+## Under the hood — the fleet (for developers &amp; maintainers)
+
+Issen is the thin front door. Behind it is a fleet of **86 standalone Rust forensic
+libraries** — each a deep expert in one artifact family, each usable on its own in your
+tooling, all pure-Rust, input-fuzzed, panic-free by lint, single static binary.
+
+`ronin-issen` is the fleet's **governance umbrella**: it holds the constitution
+([`CLAUDE.md`](CLAUDE.md)), the decisions ([`docs/decisions/`](docs/decisions/) — the
+folder umbrella + taxonomy [ADR-0017](docs/decisions/0017-fleet-folder-umbrella-taxonomy.md),
+the layer architecture [ADR-0016](docs/decisions/0016-multi-repo-layer-architecture.md),
+release order [ADR-0006](docs/decisions/0006-fleet-dependency-layering-release-order.md)),
+and the canonical component map below. The component repos live under
+`components/<category>/<repo>` as their **own independent git repos**, gitignored here —
+deliberately *not* a monorepo. The interactive diagram is
+[`docs/components-diagram.html`](docs/components-diagram.html).
+
+### Component layout (canonical)
 
 `components/<category>/<repo>` — **86 repos, 16 folders**. The component tree is the
 registry; this table is its canonical statement. Categories group by the **proximity
 rule**: same conceptual idea → same folder; contract crates live with their families;
-sub-groups get a label here, not a folder. New repos are placed by that rule and added
-to this table in the same commit that creates them. Rationale + reserved categories:
-[ADR-0017](docs/decisions/0017-fleet-folder-umbrella-taxonomy.md).
+sub-groups get a label here, not a folder.
 
 | Category | Role | Repos |
 |---|---|---|
@@ -67,13 +98,6 @@ Related but not 1:1 — the **16 folders collapse onto 5 dependency tiers** (e.g
 cross-cutting rails depended on from every tier, not a rung). A folder is chosen by *what a
 repo is*; its tier is *derived from what it imports*.
 
-## Why this repo doesn't wear the product-README standard
-
-The fleet's README / badge / GitHub-Pages / Privacy-Terms standard targets **published
-crates and CLIs** and their end users. `ronin-issen` is a **governance / umbrella** repo —
-its audience is fleet maintainers, so it carries a governance README (this file), stays
-**private**, and is secret-scanned, but skips the crates.io/docs.rs badges, the 30-second
-install hook, and the public docs-site apparatus. Standards bend to repo **role** — the
-same principle as MSRV-by-role.
+---
 
 Private · © 2026 Security Ronin Ltd
