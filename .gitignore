@@ -1,19 +1,12 @@
 # ronin-issen umbrella — a DOCS-ONLY git.
-# It tracks the fleet governance docs + migration tooling at the umbrella root
-# (CLAUDE.md = fleet constitution, REORG.md = reorg plan, .gitignore).
+# It tracks the fleet governance docs at the umbrella root
+# (CLAUDE.md = fleet constitution, README.md = canonical component layout, docs/).
 #
 # The forensic-fleet repos live under components/<category>/<repo> and _deprecated/<repo>
 # as their OWN independent git repos — they are NEVER tracked here. Tracking them would make
-# this a monorepo/workspace, which the reorg design explicitly rejects (REORG.md §1, §4.2).
+# this a monorepo/workspace, which the umbrella design explicitly rejects (ADR-0017).
 /components/
 /_deprecated/
-
-# Migration runtime artifacts (journal, generated maps, state snapshots) are ephemeral;
-# keep any hand-written tooling but ignore generated output.
-/.migration/*.jsonl
-/.migration/*.tsv
-/.migration/*.json
-/.migration/*.log
 
 # OS / editor cruft
 .DS_Store
