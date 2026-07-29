@@ -109,7 +109,7 @@ non-internal repo has ≥1 real ADR + `docs/PRD.md`; correctness-claiming repos 
 
 ## README Standard (every forensic repo)
 
-Full rules live in the global `~/.claude/CLAUDE.personal.md` ("SecurityRonin Repository README Standard"); the **pre-push readiness + verify mechanics** (adapt the README from `~/src/blazehash`, set repo About description/topics, enable Pages, confirm footer/docs links resolve) live in the `release` skill (`~/.claude/skills/release.md`). The **forensic-specific** load-bearing points for these crates:
+The universal README discipline lives in the global `~/.claude/CLAUDE.core.md` ("README Standard — Convert the Reader, Above the Fold"); the personal instantiation (sponsor handle, reference impl) in `~/.claude/CLAUDE.personal.md`; the **pre-push readiness + verify mechanics** (adapt the README from `~/src/blazehash`, set repo About description/topics, enable Pages, confirm footer/docs links resolve) live in the `release` skill (`~/.claude/skills/release.md`). The **forensic-specific** load-bearing points for these crates:
 
 - **Goal:** convert the target reader (forensic analyst *or* Rust dev) into an active user in **30 seconds** — `cargo add` to a result they care about, above the fold.
 - **Badges (badge the guarantees we already enforce; plan for TWO rows — 9 badges wrap on GitHub, and accidental wrapping destroys the information architecture):**
