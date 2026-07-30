@@ -704,6 +704,26 @@ shell): gpt anomaly-**detector** fixtures `header_sector()`/`entry_bytes()`/`bui
 `windows7_boot()`/`disk_with_boot_and_serial()` (`forensic/tests/disk_signature_tests.rs`), and the
 ntfs/usnjrnl USN+MFT record constructors in unit tests. Fuzz corpora harness-seeded.
 
+### C9c · ZFS VFS-adapter mini-images — `zfs-forensic/core/src/vfs.rs`, `forensic-vfs-engine/tests/open_zfs.rs` · SYNTHETIC ✓ · **T3** (in-code builders, no oracle; mixed: also **T1/T2** — the prober is asserted against both committed real vdev labels)
+No committed images: both builders construct an 8 MiB ZFS vdev **byte-by-byte in Rust** (no shell,
+no `zpool`), so the coverage gate is satisfiable from committed bytes alone. Builder fns —
+`fn build_image(zpl_os_type: u64)` in `zfs-forensic/core/src/vfs.rs` (`mod tests`) and
+`fn walkable_image()` in `forensic-vfs-engine/tests/open_zfs.rs`. Shape: a **crafted** XDR nvlist
+pool config at label offset 16384 (the bytes the `zfs_probe` detector reads) + two uberblock slots
+at 131072 (txg 42 and 7, so highest-txg selection runs) whose `rootbp` reaches a crafted MOS
+(object directory → DSL dir → DSL dataset) → ZPL objset with an SA-bonus file, a subdirectory, a
+slow symlink, and a legacy-`znode_phys_t` file. ZFS checksums are verified **non-fatally** by
+`zfs-core`, which is what lets a crafted chain be walked without valid fletcher4. Ground truth is
+the *construction*.
+
+Two things keep this from being purely self-referential: the detector is separately asserted
+against the **real** committed vdev labels `zfs_label0.bin` (REAL-self, T2) and
+`zfs_zol061_vdev0_label0.bin` (REAL-ext, **T1** — third-party-authored `zol-0.6.1` pool) in
+`zfs_probe_accepts_a_real_pool_config`, so ZFS *detection* is validated on configs our own encoder
+did not produce; and the independent correctness oracle for the ZFS **reader** remains the
+env-gated real pools (`ZFS_ORACLE_IMG` / `ZFS_TIER1_FREEBSD`, see §D-ZFS and
+`zfs-forensic/tests/data/README.md`).
+
 ### C10 · 4n6mount — `fuzz/corpus/session_deserialize/` (23 MB) · FUZZ · **T3** (machine-evolved robustness corpus, no oracle)
 Coverage-guided session-deserialization corpus; no curated seeds.
 
