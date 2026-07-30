@@ -67,10 +67,17 @@ rather than CI noise: `bytecode-alliance`, `embark`, `google`, `mozilla` in
 `[imports.*]`. A mis-maintained cargo-vet — a red gate nobody acts on — is worse than no
 cargo-vet; keep the imports current or remove the gate, never leave it half-configured.
 
-**Case 1 is the fleet's most expensive lived failure.** An own crate left on the default
-`audit-as-crates-io = true` makes `cargo vet --locked` audit the *workspace member* as if
-it were the published crates.io crate, demanding a per-version audit the freshly-bumped
-version cannot have. So **every** release-plz version bump turns the release PR's vet job
+**Case 1 is the fleet's most expensive lived failure, and `cargo vet init` is what causes
+it.** `cargo vet init` writes `audit-as-crates-io = true` for the repo's *own* crates by
+default. So the debt is not carelessness — it is the tool's default propagating to every
+repo that ever bootstrapped vet, and it stays invisible until release-plz opens a PR.
+**Flip it to `false` at bootstrap, in the same change that runs `init`**, and re-check it
+after any later `init`/`regenerate`. (Measured: 65 such declarations across 28 repos in
+one fleet-wide audit.)
+
+An own crate left on that default makes `cargo vet --locked` audit the *workspace member*
+as if it were the published crates.io crate, demanding a per-version audit the
+freshly-bumped version cannot have. So **every** release-plz version bump turns the release PR's vet job
 red while every other check is green. This silently blocked **28 of 44** open release PRs
 across the fleet — they had accumulated unmerged for weeks precisely because each looked
 "CI-red" and nobody chased the single vet line. Declaring own crates first-party flipped
