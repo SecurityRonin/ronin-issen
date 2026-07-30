@@ -112,9 +112,16 @@ enforcement, not a human remembering to check a bump PR. It resolves the hybrid 
 directly — timeglyph publishes a library *and* ships binaries, and its MSRV job is what
 decides, so no role classification is needed.
 
-The corollary is a hard prerequisite: **a repo without a required MSRV check does not
-automerge.** Turning automerge on there removes the only thing standing between a
-dependency wave and a silently-raised MSRV.
+The corollary is a hard prerequisite: **a repo that makes an MSRV promise and has no
+required MSRV check does not automerge.** Turning automerge on there removes the only
+thing standing between a dependency wave and a silently-raised MSRV.
+
+Scoped precisely, because the gate protects a *promise* and not every repo makes one: a
+**published library** declares a low, deliberately-stable `rust-version` that downstream
+consumers pin against, so it needs the check. An **app/CLI** declares `rust-version` = its
+own pinned toolchain (nothing pins a library dependency against it), so there is no
+downstream promise to regress and the check is optional there. Apply the prerequisite to
+the published-library tier; a pure app may automerge without it.
 
 ### 4. Which gates block, and therefore what a red means
 
