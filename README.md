@@ -20,7 +20,7 @@ ATT&CK-mapped timeline — the attack narrative, ready to read and drop into a r
 One command. One static binary. No Python, no dependency hell.
 
 ```bash
-# Ingest disk + memory, auto-detect the container, parse every artifact, correlate.
+# Ingest disk + memory, auto-detect the container, triage + parse artifacts, correlate.
 issen evidence.E01 memory.raw -o case.duckdb
 
 # Read the story — as text, or a shareable HTML report.
@@ -103,6 +103,30 @@ Related but not 1:1 — the **16 folders collapse onto 5 dependency tiers** (e.g
 `utility/`, and `codec/` are three folders but one zero-dep tier; `utility`/`codec` are
 cross-cutting rails depended on from every tier, not a rung). A folder is chosen by *what a
 repo is*; its tier is *derived from what it imports*.
+
+---
+
+## Scope & limitations
+
+Issen produces **investigative leads for a trained examiner to validate — not an
+exhaustive enumeration and not a court-ready conclusion.** Read its output with these
+limits in mind:
+
+- **Selective by design.** Issen *triages* — it parses the artifacts it recognizes and
+  supports, not everything on the medium. It does not claim to recover every artifact,
+  reconstruct every event, or exclude alternative explanations.
+- **Absence of a finding is not evidence of absence.** A gap in the timeline may mean the
+  artifact was unsupported, unparsed, anti-forensically wiped, or never existed — the
+  output does not distinguish these. Corroborate before drawing conclusions.
+- **ATT&CK mappings are context, not proof.** A technique surfaced against a finding says
+  the observed evidence is *consistent with* that technique — it does not establish that
+  an attacker performed it. Treat mappings as leads to investigate, versioned to a stated
+  ATT&CK release, reviewable against the underlying evidence.
+- **Timelines are selected, parsed events — not ground truth.** Timestamps can be missing,
+  conflicting, timezone-ambiguous, or manipulated; correlation surfaces relationships, it
+  does not certify causation.
+- **Validate before relying on it.** Confirm supported input formats and the released
+  build's behavior against a known corpus before using Issen on any matter that matters.
 
 ---
 
