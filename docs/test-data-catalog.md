@@ -1014,7 +1014,349 @@ tombstone, plus one `chat` and one `contact` row. Schema authority: Mazzoli
   data — freely redistributable. Per-file provenance:
   `components/parser/whatsapp-desktop-forensic/tests/data/README.md`.
 - The crypto path (`decrypt_body`, AES-CBC) is validated separately at **T1**
-  against independent openssl KAT vectors — not from this store.
+  against independent openssl KAT vectors — not from this store (§D15a).
+
+#### D15a · whatsapp AES-CBC body-decryption KAT vectors (in-code constants, no files) · REAL-ext ✓ · **T1** (openssl-authored known-answer vectors)
+
+`decrypt_body`'s AES-CBC path is checked against **openssl-authored** Known-Answer
+vectors rather than a self-encoded round-trip (the circular-validation rule for
+crypto). Nothing is committed as a file — the vectors are `hex_literal::hex!`
+constants in `whatsapp-desktop-core/tests/crypto.rs`:
+
+- Keys AES-256 `0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20` and
+  AES-128 `0102030405060708090a0b0c0d0e0f10`; IV
+  `000102030405060708090a0b0c0d0e0f`; plaintext
+  `WhatsApp E2E body plaintext, 42!` (32 bytes).
+- Ciphertexts (48 bytes each, PKCS7): AES-256
+  `e52fc6172af8c0cba684baecb46594188c16f540d2402c394cb9409a6a9385e18c81d24a9ffcc80fdc32c694493c0297`,
+  AES-128
+  `1f0fe41723155396f55c9e2c0d1578e38001047dc347311a20ab653c4950ac337a10e35879a023fa7ddc859fabbae716`.
+- **Verbatim generator** — the test file's header records the command abbreviated
+  (`openssl enc -aes-256-cbc -K 0102..20 -iv 0001..0f -nosalt`); these are the full
+  lines, **re-run 2026-07-30 with OpenSSL 3.0.15 and confirmed to reproduce both
+  ciphertexts byte-for-byte**:
+  ```
+  printf '%s' 'WhatsApp E2E body plaintext, 42!' | openssl enc -aes-256-cbc -K 0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20 -iv 000102030405060708090a0b0c0d0e0f -nosalt | xxd -p
+  printf '%s' 'WhatsApp E2E body plaintext, 42!' | openssl enc -aes-128-cbc -K 0102030405060708090a0b0c0d0e0f10 -iv 000102030405060708090a0b0c0d0e0f -nosalt | xxd -p
+  ```
+- Consumed by `whatsapp-desktop-core/tests/crypto.rs` —
+  `decrypts_aes256_cbc_kat`, `decrypts_aes128_cbc_kat`, plus four fail-loud
+  negatives (`wrong_key_fails_loud_not_fabricated`,
+  `wrong_aes128_key_fails_loud_not_fabricated`, `bad_key_length_fails_loud`,
+  `bad_iv_length_fails_loud`).
+- Redistribution: public test constants chosen for this repo; no key material of
+  value.
+
+---
+
+### D16 · chromium-storage-forensic — `tests/data/{local-storage,indexeddb,simple-cache}/` (committed, ~6.9 KB) · REAL-self ✓ (+ one REAL-ext cached response) · **T2** (real Chromium engine output; ground truth from the documented writes)
+
+Real Chromium storage minted on-host by driving headless **Google Chrome** against a
+loopback page, then copying the throwaway profile's `Local Storage/leveldb`,
+`IndexedDB/*.indexeddb.leveldb` and `Cache/Cache_Data` directories. The bytes
+(LevelDB key coding, Blink `SerializedScriptValue` values, Simple Cache framing) are
+Chrome's; the known writes are the oracle.
+
+- **Ground-truth writes:** localStorage `greeting = hello` and
+  `mint_ls_key = mint_ls_value_δ` (the δ / U+03B4 forces the UTF-16LE value path);
+  IndexedDB database `mintdb`, object store `notes`,
+  `put({title:'first note', n:42, tags:['a','b']}, 'note-1')`; a cached resource
+  `http://127.0.0.1:8731/cached.txt` with body `CACHED-CONTENT-MARKER-9427` served
+  `Cache-Control: public, max-age=999999`.
+- Consumed by `chromium-storage-localstorage/tests/decode.rs`
+  (`real_chrome_local_storage_decodes_the_known_writes`,
+  `real_chrome_local_storage_has_origin_meta_record`),
+  `chromium-storage-indexeddb/tests/decode.rs`
+  (`resolves_database_and_object_store_names`, `decodes_the_primary_key`,
+  `decodes_the_blink_v8_value`, `emits_exactly_the_one_live_data_record`) and
+  `chromium-storage-cache/tests/entry.rs` (`decodes_the_known_url_and_body`,
+  `decodes_the_http_status_and_headers`, `read_dir_returns_both_real_entries`, …).
+- Files: `local-storage/leveldb/{000003.log,CURRENT,MANIFEST-000001}` ·
+  `indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/{000003.log,CURRENT,MANIFEST-000001}` ·
+  `simple-cache/{ea2e47cbdc22305e_0,d9c2c72a2ec24e84_0}`. `LOCK`/`LOG` excluded
+  (Chrome-runtime state). MD5s in §H.
+- **Verbatim generator — two headless-Chrome phases** (recorded in
+  `tests/data/README.md`; there is **no committed mint script** for this repo):
+  ```
+  # Phase 1 - localStorage + IndexedDB + a subresource fetch:
+  "Google Chrome" --headless=new --disable-gpu --no-first-run \
+    --user-data-dir=$PROFILE --disable-background-networking \
+    --disable-component-update --disable-sync --disable-default-apps \
+    --disable-domain-reliability --metrics-recording-only \
+    "http://127.0.0.1:8731/index.html"    # ~8 s, then SIGTERM (flush LevelDB)
+  # Phase 2 - top-level navigation to the cacheable resource (HTTP-cache write):
+  "Google Chrome" --headless=new ... "http://127.0.0.1:8731/cached.txt"  # ~6 s, SIGTERM
+  ```
+  The `index.html` and `cached.txt` served on `127.0.0.1:8731` are **not committed** —
+  the writes they perform are the record above, so re-minting means re-authoring the
+  page from that record rather than re-running a script.
+- `simple-cache/d9c2c72a2ec24e84_0` is an **incidental REAL-ext entry**: a genuine
+  Google response Chrome cached on its own during the mint
+  (`https://www.google.com/async/folae?async=_fmt:pb&udm=50&client_locale=en-US&client_country=hk`,
+  `content-type: application/x-protobuffer`), kept because it confirms the entry
+  layout generalises beyond the loopback resource. Third-party server bytes, no
+  personal data, but it is **not** ours to license.
+- Redistribution: the loopback-origin writes carry no third-party or personal data.
+  Per-file provenance:
+  `components/parser/chromium-storage-forensic/tests/data/README.md`.
+
+---
+
+### D17 · signal-desktop-forensic — minted SQLCipher `db.sqlite` (no committed bytes) + real host profile (gitignored) · SYNTHETIC ✓ · **T2** (independent `sqlcipher` CLI differential; mixed: REAL-self host artifacts, uncommitted)
+
+Signal Desktop stores messages in a SQLCipher-4 `sql/db.sqlite` whose raw key is
+wrapped by an `encryptedKey` in `config.json`. **Nothing binary is committed** —
+`tests/data/` holds only its `README.md`, and `.gitignore` blocks
+`tests/data/{*.sqlite,*.db,db.sqlite*,config.real.json}`.
+
+- **Generator (in-code, no external command):** a real SQLCipher database written
+  per test run —
+  `components/parser/signal-desktop-forensic/core/src/store.rs:256`
+  (`#[cfg(test)] testsupport::mint_signal_db`), mirrored for the integration crate
+  at `core/tests/differential_sqlcipher.rs:50` (`mint_signal_db`; the `cfg(test)`
+  builder is unreachable across the crate boundary, so the schema + rows are
+  duplicated deliberately and kept in sync). Fixture raw key
+  `FIXTURE_KEY_HEX = 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff`.
+- **Ground truth (documented construction):** two `conversations` rows —
+  `conv-alice` (`private`, `active_at` 1700000000000, `profileName` Alice, `e164`
+  `+15551230001`) and `conv-team` (`group`, `active_at` 1700000500000, name `Team`);
+  three `messages` rows — `msg-1` incoming `hey there`, `msg-2` outgoing `photo!`
+  with one `image/jpeg` attachment (`pic.jpg`, 20480 bytes, path `ab/abcdef0123`),
+  `msg-3` incoming `gm all` in the group. Schema authority: Signal Desktop's own
+  source plus A. Bilz, *A Forensic Gold Mine II: Forensic Analysis of Signal
+  Messenger on Windows 10* (cited from `forensicnomicon-core::messenger_desktop`) —
+  not invented.
+- **Independent oracle (T2):** the same minted DB is decrypted and read by a
+  separate **`sqlcipher` CLI** process and reconciled row-by-row in
+  `core/tests/differential_sqlcipher.rs::differential_reader_matches_sqlcipher_cli`
+  — env-gated on **`SIGNAL_SQLCIPHER_ORACLE`** (path to the `sqlcipher` binary);
+  skips cleanly when unset. Because the CLI links its own SQLCipher/OpenSSL build,
+  agreement also cross-checks that our bundled library emitted a spec-compliant
+  SQLCipher-4 file.
+- **Real host artifacts — REAL-self `~`, never committed.** The dev host's
+  `~/Library/Application Support/Signal/{config.json,sql/db.sqlite}` (~295 MB) were
+  copied to `/tmp/signal-oracle/` to confirm the modern `encryptedKey` v10 wire
+  format (166 hex chars / 83 bytes, ASCII prefix `v10`) and the encrypted-at-rest
+  posture (first 16 bytes high-entropy, not `SQLite format 3\0`). Consumed by
+  `core/tests/real_oracle.rs` (`real_config_json_parses_and_is_modern_v10`,
+  `real_db_is_sqlcipher_and_rejects_a_wrong_key_loud`, `real_ephemeral_json_parses`),
+  env-gated on **`SIGNAL_PROFILE`** / **`SIGNAL_DB`**. A live user's private
+  messages — **do not commit, do not redistribute**; the live Keychain secret is
+  policy-blocked from materialization, so the DB is never decrypted in the build.
+- Per-file provenance:
+  `components/parser/signal-desktop-forensic/tests/data/README.md`.
+
+---
+
+### D18 · discord-desktop-forensic — minted Chromium Local Storage LevelDB (no committed bytes) + real host profile (env-gated) · SYNTHETIC ✓ · **T2** (independent `rusty-leveldb` writer + `ccl_chromium_reader` differential)
+
+Discord's Electron client keeps its auth token and account/guild state in a
+Chromium **Local Storage** LevelDB. **This repo commits no binary artifact** —
+`tests/data/` holds only its `README.md`; every store is minted into a temp dir at
+test time.
+
+- **Generator (in-code, no external command):**
+  `components/parser/discord-desktop-forensic/core/tests/oracle.rs:48`
+  (`mint_discord_profile`) writes `<dir>/Local Storage/leveldb` with the
+  **independent `rusty-leveldb` crate** in the documented Chromium key format
+  (`_` + origin + NUL + `0x01` Latin-1 marker + script key → `0x01` + value);
+  `core/tests/differential_ccl.rs:63` (`mint_discord_leveldb`) mints the same shape
+  for the differential.
+- **Ground truth (the exact records written):** origin `https://ptb.discord.com` —
+  `token` = `SYNTHETIC-DISCORD-TOKEN-FIXTURE-not-a-real-credential-000` (a
+  deliberate non-credential placeholder; redaction only measures length),
+  `MultiAccountStore` = `{"_state":{"users":[{"id":"695526392107892786","username":"4n6h4x0r","discriminator":"0","avatar":"abc","tokenStatus":2}]}}`,
+  `SelectedGuildStore` = `{"selectedGuildId":"81384788765712384"}`.
+- Consumed by
+  `core/tests/oracle.rs::minted_leveldb_round_trips_all_artifact_classes`.
+- **Independent oracle (T1 for the storage layer):**
+  `core/tests/differential_ccl.rs::differential_matches_ccl_chromium_reader`
+  reconciles our `chromium_storage_localstorage::read_dir` decode against
+  **`cclgroupltd/ccl_chromium_reader`** reading the identical bytes, driven by the
+  committed `core/tests/ccl_oracle.py` (hex/TSV line stream). Env-gated on
+  **`CCL_DISCORD_ORACLE`** (a Python interpreter that can
+  `import ccl_chromium_reader`) with optional **`CCL_DISCORD_DIR`**. Tier for the
+  Discord *decode* itself stays T3 — see the repo's `docs/validation.md`.
+- **Real host profile — REAL-self ✓, never committed.** A genuine signed-in
+  Discord PTB profile (`~/Library/Application Support/discordptb/Local Storage`):
+  one live 126-char auth token, one `MultiAccountStore` account, 97 recent
+  snowflakes, 43 origin `META:` records as observed on the dev host. Consumed by
+  `core/tests/oracle.rs::real_discord_profile_when_present`, env-gated on
+  **`DISCORD_PROFILE`**. A live account credential — never committed, never logged
+  verbatim; the test asserts token presence + length only.
+- Per-file provenance:
+  `components/parser/discord-desktop-forensic/tests/data/README.md`.
+
+---
+
+### D19 · wire-desktop-forensic — `tests/data/wire-indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/` (committed, ~6.4 KB) · REAL-self ✓ · **T2** (real Chrome/V8 output in Wire's documented Dexie schema; T1 differential vs `ccl_chromium_reader`)
+
+No purpose-built public **Wire** IndexedDB forensic sample exists (the closest
+public Electron-messenger LevelDB corpus, `lxndrblz/forensicsim`, is Microsoft
+Teams — a different Dexie schema), so the committed fixture is a **real
+Chromium-authored** IndexedDB store minted on-host in Wire's documented schema.
+
+- **Ground-truth writes** (IndexedDB database `wire`; stores `conversations`,
+  `events`, `users`, `clients`, `keys`): `conversations/conv-1` → name
+  `Incident Ops`; `events/conv-1@ev-1` → cleartext `meet at 9`, from `user-alice`,
+  `2026-01-02T03:04:05.000Z`; `events/conv-1@ev-enc` → encrypted body carried as an
+  `ArrayBuffer` (opaque Proteus-style), from `user-bob`,
+  `2026-01-02T03:05:00.000Z`; `users/user-alice` → `Alice Example`;
+  `clients/client-7f` → model `Wire for macOS`; `keys/otr_key` → attachment-key
+  record.
+- Schema authority: hunjison, *Forensic Analysis of Wire Messenger in Windows OS*
+  — <https://velog.io/@hunjison/Forensic-Analysis-of-Wire-Messenger-in-Windows-OS>
+  (the `https_app.wire.com_0.indexeddb.leveldb` store + the `otr_key`).
+- Consumed by `wire-desktop-core/tests/oracle_minted.rs::reads_real_minted_wire_schema_store`
+  (tier-2, optional override **`WIRE_MINTED_DIR`**) and
+  `wire-desktop-core/tests/differential_ccl.rs::differential_matches_ccl_chromium_reader`
+  (tier-1 differential of the LevelDB-key + Blink/V8 `SerializedScriptValue` decode
+  against **`cclgroupltd/ccl_chromium_reader`** via the committed
+  `wire-desktop-core/tests/ccl_oracle.py`; env-gated on **`CCL_WIRE_ORACLE`**, with
+  optional **`CCL_WIRE_DIR`**).
+- Files: `000003.log` · `CURRENT` · `LOG` · `MANIFEST-000001` (the 0-byte `LOCK` is
+  process state and intentionally absent; note this store **does** commit `LOG`,
+  unlike §D13/§D15/§D16). MD5s in §H.
+- **Generator — mint recipe, NO COMMITTED MINT SCRIPT.** The verbatim
+  headless-Chrome commands live in
+  `components/parser/wire-desktop-forensic/tests/data/README.md`
+  ("Regenerate the store"): serve an `index.html` on `127.0.0.1:8731`, run
+  `"Google Chrome" --headless=new --disable-gpu --no-first-run
+  --no-default-browser-check --disable-background-networking
+  --disable-component-update --no-pings --user-data-dir="$MINT/profile"
+  "http://127.0.0.1:8731/index.html"`, `sleep 8`, `kill -TERM` to flush LevelDB,
+  then copy `$MINT/profile/Default/IndexedDB/http_127.0.0.1_8731.indexeddb.leveldb`.
+  **The `index.html` that performs the writes is not committed** — the repo README
+  describes it in prose and points at the minting commit's git history, so the
+  writes above (not a script) are the reproducible record.
+- The origin is `http_127.0.0.1_8731` only because the page was served from
+  loopback; a real Wire profile's origin is `https_app.wire.com_0` and the reader is
+  origin-agnostic.
+- Redistribution: self-generated, no third-party rights, no personal data. Per-file
+  provenance: `components/parser/wire-desktop-forensic/tests/data/README.md`.
+
+---
+
+### D20 · keychain-forensic — `tests/data/test-login.keychain-db` (committed, 23376 B) · REAL-self ✓ · **T2** (Apple `security`-authored artifact; Apple's own tool is the readback oracle)
+
+A genuine macOS keychain file produced by **Apple's Keychain Services CLI**
+(`/usr/bin/security`) on macOS 15.7.8 (build 24G809) — Apple's production
+CDSA/keychain code wrote the PBKDF2 salt, derived and 3DES-wrapped the DBKey, and
+encrypted the SSGP payloads. None of it was authored by this crate, so recovering
+the known secrets is a real-artifact check, not a self-consistent round-trip.
+
+- **Ground truth:** login password `TestPass123!`; account `alice` / service
+  `MySecretService` → `S3cr3t-KC-Value!`; account `Chrome` / service
+  `Chrome Safe Storage` → `SafeStorageKeyDemo00` (the Chromium Safe Storage key
+  path — the headline use case).
+- **Verbatim generator** (macOS host required):
+  ```
+  KC=/tmp/test-login.keychain-db
+  security create-keychain -p "TestPass123!" "$KC"
+  security unlock-keychain  -p "TestPass123!" "$KC"
+  security set-keychain-settings "$KC"
+  security add-generic-password -a "alice" -s "MySecretService" -w "S3cr3t-KC-Value!" "$KC"
+  security add-generic-password -a "Chrome" -s "Chrome Safe Storage" -w "SafeStorageKeyDemo00" "$KC"
+  security find-generic-password -a "alice"  -s "MySecretService"     -w "$KC"
+  security find-generic-password -a "Chrome" -s "Chrome Safe Storage" -w "$KC"
+  cp "$KC" tests/data/test-login.keychain-db
+  ```
+  The two `find-generic-password` lines are the **oracle** — Apple's own tool prints
+  the stored secret back. Byte layout varies per mint (salt, IV and 3DES keys are
+  randomised), so the hashes below pin this specific file.
+- MD5 `9384c3a0547aebf47c407c7b5e4a3bab` · SHA-256
+  `8dfecb9b2c8939687b60a81e86ed75f247117126ac971a4d9b6aac842854e6d1`.
+- Consumed by `core/tests/oracle_keychain.rs`
+  (`recovers_known_secret_from_os_minted_keychain`,
+  `recovers_chromium_safe_storage_key`,
+  `wrong_password_reports_locked_not_a_fabricated_secret`) and
+  `forensic/tests/cli.rs` (`audit_recovers_and_classifies_real_secrets`,
+  `cli_run_success_against_real_fixture`, …).
+- Redistribution: throwaway keychain, deliberately public test values, no real
+  credentials — safe to commit and redistribute under the repo's Apache-2.0.
+  Per-file provenance:
+  `components/encryption/keychain-forensic/tests/data/README.md`.
+
+---
+
+### D21 · chromium-safestorage — `tests/data/css-test-login.keychain-db` (committed, 24852 B) + in-code cookie/DPAPI vectors · REAL-self ✓ + REAL-ext ✓ · **T2** (Apple `security`-authored keychain) / **T1** (Python-`cryptography` and impacket-authored vectors)
+
+The Chromium Safe Storage key-recovery + cookie-decrypt path across all three
+platforms. One committed file plus three families of in-code vectors.
+
+- **`css-test-login.keychain-db`** — minted the same way as §D20 with
+  `/usr/bin/security`; MD5 `1e6f1a007edf032e30086dc44737127e`, SHA-256
+  `9d616654f414033a69ba57e9789b0500ab2287ef32f81918953659db3509461d`. **Verbatim
+  generator:**
+  ```
+  KC=/tmp/css-test-login.keychain-db
+  security create-keychain -p "TestPass123!" "$KC"
+  security set-keychain-settings "$KC"
+  security unlock-keychain  -p "TestPass123!" "$KC"
+  security add-generic-password -a "Chrome" -s "Chrome Safe Storage" -w "SafeStorageDemoKey01" "$KC"
+  security add-generic-password -a "Brave"  -s "Brave Safe Storage"  -w "BraveDemoStorageKey9" "$KC"
+  security add-generic-password -a "alice"  -s "MyLoginService"      -w "not-a-safe-storage-pw" "$KC"
+  ```
+  Ground truth: login password `TestPass123!`; `Chrome Safe Storage` →
+  `SafeStorageDemoKey01` (macOS AES-128 key
+  `PBKDF2-HMAC-SHA1("SafeStorageDemoKey01","saltysalt",1003,16)` =
+  `cf5505107fba7a67db54d90d9137187b`); `Brave Safe Storage` →
+  `BraveDemoStorageKey9`. Consumed by `core/tests/oracle_keychain.rs`
+  (`recovers_chrome_safe_storage_key`, `recovers_a_second_browser_not_just_chrome`,
+  `wrong_login_password_reports_locked_not_a_fabricated_key`,
+  `missing_service_reports_not_found_with_the_name`).
+- **v10 cookie ciphertext vectors — REAL-ext ✓, T1.** Not files: hex constants in
+  `core/tests/oracle_cookie.rs`, produced by **Python's `cryptography` 48.0.0**
+  (an independent AES-128-CBC + PBKDF2 implementation). **Verbatim generator** is
+  committed in `components/parser/chromium-safestorage/tests/data/README.md`
+  (the `derive()` / `enc_v10()` snippet plus the three calls: macOS 1003-round
+  cookie, a modern 32-byte `SHA256(host)`-prefixed cookie for `example.com`, and
+  the Linux `peanuts` 1-round cookie). Consumed by
+  `macos_key_decrypts_python_authored_v10_cookie`,
+  `modern_cookie_domain_hash_is_verified_and_stripped`,
+  `linux_v10_peanuts_decrypts_without_a_secret`,
+  `linux_v11_derives_from_keyring_secret`,
+  `wrong_key_fails_padding_not_a_fabricated_plaintext`, `unknown_prefix_shows_the_bytes`.
+- **Windows DPAPI vectors — REAL-ext ✓, T1 (borrowed).** The `Local State` +
+  `v10` AES-GCM path reuses **`dpapi-core`'s impacket-validated** vectors (that
+  crate's `tests/data/README.md` is the provenance home); driven here through
+  `recover_key` / `RecoveredKey::decrypt_cookie` in
+  `core/tests/oracle_cookie.rs::{windows_local_state_recovers_aes256_key_and_decrypts_v10_gcm,
+  windows_absent_master_key_refuses, windows_local_state_without_encrypted_key_errors,
+  windows_wrong_key_family_gcm_tag_fails_on_garbage}`.
+- **Published-KDF KAT** — `core/tests/kdf_kat.rs`
+  (`linux_v10_published_key`, `macos_1003_rounds_known_key`): the well-known
+  Chromium Linux `peanuts` key and the 1003-round macOS derivation.
+- **Live-host check — REAL-self, env-gated, nothing committed.**
+  `core/tests/live_chrome.rs::live_real_chrome_key_decrypts_a_real_cookie` reads
+  the analyst's own installed browser keychain entry + `Cookies` DB. Gated on
+  **`CHROMIUM_SAFESTORAGE_LIVE=1`**, with **`CSS_LIVE_SERVICE`** (default
+  `Brave Safe Storage`) and **`CSS_LIVE_COOKIES`** overrides. Real user cookies —
+  never committed, never printed.
+- Redistribution: the keychain and all vectors use demo passwords chosen for this
+  repo; safe to commit. Per-file provenance:
+  `components/parser/chromium-safestorage/tests/data/README.md`.
+
+---
+
+### D22 · Oracle tooling for the §D16–§D21 corpora (validation prerequisite — not test data)
+
+The Chromium/messenger differentials need third-party tools present on the host.
+Each is **skip-when-absent** (an unset env var prints a skip and passes), so the
+committed gate never depends on them — but a tier-1 claim does.
+
+| Oracle | What it checks | How it is reached |
+|---|---|---|
+| **`cclgroupltd/ccl_chromium_reader`** (Python, MIT) — local checkout at `~/src/ccl_chromium_reader`, `pyproject.toml` version `0.2.0`, git `65c1637aa93b3fbd8a92e43c41a16f779976b518` ("Profile folder gets downloads.", 2024-07-03) | independent LevelDB key coding + Blink/V8 `SerializedScriptValue` decode of the same bytes our readers parse | `PYTHONPATH=~/src/ccl_chromium_reader CCL_<X>_ORACLE=$(which python3)`; per-repo driver scripts `core/tests/ccl_oracle.py` (discord), `whatsapp-desktop-core/tests/ccl_oracle.py`, `wire-desktop-core/tests/ccl_oracle.py`. Fixture-dir overrides: `CCL_DISCORD_DIR` / `CCL_WHATSAPP_DIR` / `CCL_WIRE_DIR` |
+| **`sqlcipher` CLI** (own SQLCipher + OpenSSL build) | decrypts and reads the minted Signal DB independently of our bundled SQLCipher | `SIGNAL_SQLCIPHER_ORACLE=<path to sqlcipher>` |
+| **Apple `/usr/bin/security`** | wrote the §D20/§D21 keychains and prints the stored secret back (`find-generic-password -w`) | macOS host; no env var (mint-time oracle) |
+| **Python `cryptography` 48.0.0** | authored the §D21 v10 cookie ciphertexts (independent AES-CBC + PBKDF2) | mint-time only; vectors are committed as constants |
+| **`openssl enc`** (3.0.15 verified) | authored the §D15a AES-CBC KAT vectors | mint-time only; vectors are committed as constants |
+| **`impacket`** (via `dpapi-core`) | authored the §D21 Windows DPAPI / `Local State` vectors | borrowed from `dpapi-core`'s corpus |
+
+Host-artifact gates (real app data, never committed): `DISCORD_PROFILE`,
+`SIGNAL_PROFILE` / `SIGNAL_DB`, `CHROMIUM_SAFESTORAGE_LIVE` (+ `CSS_LIVE_SERVICE`,
+`CSS_LIVE_COOKIES`), `WIRE_MINTED_DIR`.
 
 ---
 
@@ -1066,8 +1408,14 @@ re-running `cargo fuzz`; safe to regenerate/delete.
 1. **Undetermined real sources to resolve:** `mft/samples/MFT` (13 MB) and `srum-forensic` SRUDB
    lack in-repo source documentation. Resolve before any redistribution.
 2. **Do-not-redistribute:** Windows Server ISO (B8, MS license); anything with real personal data
-   (`Collection-A380`, Brave SNSS, `mft/samples/MFT` if casework) — sanitize/verify first.
-3. **Integrity:** every corpus file MD5-verified 2026-06-09 (manifest in §H). `DESKTOP-E01.zip`
+   (`Collection-A380`, Brave SNSS, `mft/samples/MFT` if casework) — sanitize/verify first. Also
+   note `chromium-storage-forensic/tests/data/simple-cache/d9c2c72a2ec24e84_0` (§D16) is a genuine
+   cached **Google** HTTP response (third-party bytes, non-personal) rather than a loopback mint.
+3. **Live-host artifacts that must never be committed:** the real Signal profile (§D17,
+   `SIGNAL_PROFILE`/`SIGNAL_DB`), the real Discord token store (§D18, `DISCORD_PROFILE`) and the
+   analyst's own browser cookies (§D21, `CHROMIUM_SAFESTORAGE_LIVE`). All three are env-gated and
+   skip cleanly when absent.
+4. **Integrity:** every corpus file MD5-verified 2026-06-09 (manifest in §H). `DESKTOP-E01.zip`
    matches DFIR Madness's published MD5 exactly. The DEFCON/Magnet "MD5" values quoted above are EWF
    *media* hashes (`ewfinfo` — the imaged drive), **not** container-file hashes, so the file-MD5s in
    §H correctly differ. Re-verify with `md5` / `Get-FileHash` for evidence-grade use.
@@ -1076,7 +1424,8 @@ re-running `cargo fuzz`; safe to regenerate/delete.
 
 ## H. MD5 manifest
 
-File hashes of every downloadable corpus artifact (`md5`, 2026-06-09). `tests/data/` is gitignored,
+File hashes of every downloadable corpus artifact (`md5`, 2026-06-09; the §D15/§D16 and
+§D19–§D21 rows hashed 2026-07-30). `tests/data/` is gitignored,
 so these are recorded here. Verify a download with `md5 <file>` (macOS) / `md5sum <file>` (Linux) /
 `Get-FileHash -Algorithm MD5 <file>` (PowerShell). `Szechuan/` = the
 `dfirmadness-szechuan-sauce/` folder.
@@ -1111,24 +1460,25 @@ so these are recorded here. Verify a download with `md5 <file>` (macOS) / `md5su
 | `leveldb-forensic/tests/data/chromium-local-storage/leveldb/000003.log` (committed, §D13) | 319 | `7259318b8db2a78a96f2b32e257d9e97` |
 | `leveldb-forensic/tests/data/chromium-local-storage/leveldb/CURRENT` (committed, §D13) | 16 | `46295cac801e5d4857d09837238a6394` |
 | `leveldb-forensic/tests/data/chromium-local-storage/leveldb/MANIFEST-000001` (committed, §D13) | 41 | `5af87dfd673ba2115e2fcf5cfdb727ab` |
-| `chromium-storage-forensic/tests/data/local-storage/leveldb/000003.log` (committed, §D14) | 243 | `c615e82a28579922d3d0caa1fdc176d1` |
-| `chromium-storage-forensic/tests/data/local-storage/leveldb/CURRENT` (committed, §D14) | 16 | `46295cac801e5d4857d09837238a6394` |
-| `chromium-storage-forensic/tests/data/local-storage/leveldb/MANIFEST-000001` (committed, §D14) | 41 | `5af87dfd673ba2115e2fcf5cfdb727ab` |
-| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/000003.log` (committed, §D14) | 1360 | `dd48c7a058efaa2e81490f4629dd6b01` |
-| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/CURRENT` (committed, §D14) | 16 | `46295cac801e5d4857d09837238a6394` |
-| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/MANIFEST-000001` (committed, §D14) | 23 | `3fd11ff447c1ee23538dc4d9724427a3` |
-| `chromium-storage-forensic/tests/data/simple-cache/ea2e47cbdc22305e_0` (committed, §D14) | 449 | `58a8001d87b2d970be5e5d4293896f4e` |
-| `chromium-storage-forensic/tests/data/simple-cache/d9c2c72a2ec24e84_0` (committed, §D14) | 4853 | `34c8262922bc9d8ddd1f5a7d9ef3ff0c` |
+| `chromium-storage-forensic/tests/data/local-storage/leveldb/000003.log` (committed, §D16) | 243 | `c615e82a28579922d3d0caa1fdc176d1` |
+| `chromium-storage-forensic/tests/data/local-storage/leveldb/CURRENT` (committed, §D16) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `chromium-storage-forensic/tests/data/local-storage/leveldb/MANIFEST-000001` (committed, §D16) | 41 | `5af87dfd673ba2115e2fcf5cfdb727ab` |
+| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/000003.log` (committed, §D16) | 1360 | `dd48c7a058efaa2e81490f4629dd6b01` |
+| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/CURRENT` (committed, §D16) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `chromium-storage-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/MANIFEST-000001` (committed, §D16) | 23 | `3fd11ff447c1ee23538dc4d9724427a3` |
+| `chromium-storage-forensic/tests/data/simple-cache/ea2e47cbdc22305e_0` (committed, §D16) | 449 | `58a8001d87b2d970be5e5d4293896f4e` |
+| `chromium-storage-forensic/tests/data/simple-cache/d9c2c72a2ec24e84_0` (committed, §D16) | 4853 | `34c8262922bc9d8ddd1f5a7d9ef3ff0c` |
+| `whatsapp-desktop-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/000003.log` (committed, §D15) | 6215 | `6fd64ebd0191eaec3d2acc75da0dbcf9` |
+| `whatsapp-desktop-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/CURRENT` (committed, §D15) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `whatsapp-desktop-forensic/tests/data/indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/MANIFEST-000001` (committed, §D15) | 23 | `3fd11ff447c1ee23538dc4d9724427a3` |
+| `wire-desktop-forensic/tests/data/wire-indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/000003.log` (committed, §D19) | 6037 | `b9f1f4378b5d886d508ab46831b407a8` |
+| `wire-desktop-forensic/tests/data/wire-indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/CURRENT` (committed, §D19) | 16 | `46295cac801e5d4857d09837238a6394` |
+| `wire-desktop-forensic/tests/data/wire-indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/LOG` (committed, §D19) | 303 | `968c9d1178aa2ef918414d3b99557dad` |
+| `wire-desktop-forensic/tests/data/wire-indexeddb/http_127.0.0.1_8731.indexeddb.leveldb/MANIFEST-000001` (committed, §D19) | 23 | `3fd11ff447c1ee23538dc4d9724427a3` |
+| `keychain-forensic/tests/data/test-login.keychain-db` (committed, §D20) | 23376 | `9384c3a0547aebf47c407c7b5e4a3bab` |
+| `chromium-safestorage/tests/data/css-test-login.keychain-db` (committed, §D21) | 24852 | `1e6f1a007edf032e30086dc44737127e` |
 
-### §D14 — chromium-storage-forensic (Simple Cache + IndexedDB + Local Storage), **T2**, REAL-self
-
-Real Chromium storage minted on-host by driving headless Google Chrome against a local
-cacheable page, then copying the profile's `Local Storage/leveldb`,
-`IndexedDB/*.indexeddb.leveldb`, and `Cache/Cache_Data` dirs. Known writes are the oracle:
-localStorage `greeting=hello` + `mint_ls_key=mint_ls_value_δ`; IndexedDB `mintdb`/`notes`
-`put({title:'first note',n:42,tags:['a','b']},'note-1')`; a cached resource with body
-`CACHED-CONTENT-MARKER-9427`. Full mint command + flags in
-`components/parser/chromium-storage-forensic/tests/data/README.md`. Confidence: ✓ (verified —
-tests decode the known writes).
+`signal-desktop-forensic` (§D17) and `discord-desktop-forensic` (§D18) commit **no**
+binary artifact — their fixtures are minted per test run — so they have no rows here.
 
 (The inner `…-235706.dmp` carries its own published SHA256 — see §A6.)
