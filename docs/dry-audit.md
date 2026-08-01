@@ -100,7 +100,31 @@ ADR-0018 is explicit that automerge is gated on the *promise*, not the repo role
 
 Two consequences worth separating: fixing this is cheap (branch protection with a blocking set: fmt · clippy · test · MSRV · deny · vet), and it is **outward-facing repo administration** affecting every check on every repo, so it belongs to the fleet owner rather than to any change in this audit.
 
-### 1.4 Two live unsoundness advisories are invisible to the gate meant to catch them
+### 1.4 Three latent defects the lint gaps were hiding — and why the survey missed them
+
+Closing the `workspace.lints` gaps produced real bugs, which is the strongest evidence the finding was not cosmetic.
+
+| Defect | Site | Severity |
+|---|---|---|
+| **`nearest()` returns the wrong state in release builds** | `state-history-forensic/src/cohort.rs:86` — `wt.secs - t.secs` over i64, wall times unbounded and evidence-derived. Debug panics *(`attempt to subtract with overflow`)*; **release wraps and silently returns the wrong cohort member.** Fixed with `abs_diff` | A published fleet library returning wrong answers, not crashing |
+| **Panic from the public builder API** | `shrinkpath/src/strategy/fish.rs:27` — `ShrinkOptions::dir_length(0)` is advertised as legal, then `chars.take(len - 1)` overflows. No malformed input required | Reachable through documented API |
+| **Unbounded allocation from an untrusted length field** | `disk-forensic` `parse_dynamic` — `max_entries` read from a VHD `cxsparse` header, then `vec![0u8; max_entries * 4]` unvalidated. `0xFFFF_FFFF` requests **16 GiB from a 3 KB file**. `block_size` *is* validated on the line above | Tiered honestly: on macOS the allocation **succeeded** via lazy zero pages and surfaced only as “failed to fill whole buffer”, so this is a memory-pressure/DoS vector plus a useless diagnostic — **not** a guaranteed crash |
+
+**Why the original survey scored these repos compliant — a measurement error worth generalizing.** A Cargo member with its own `[lints]` table **replaces** workspace inheritance rather than extending it. So a root-only survey — which is what produced the “71/91 canonical” figure — cannot see a member-level opt-out:
+
+- **`aff4-forensic`** has per-member tables; `core` denies `unwrap_used` but **not** `expect_used`, which is exactly why four `.expect("slice")` calls sat in the binary `/map` parser. Scores compliant at the root.
+- **`vhdx-forensic`** is worse: the root looks canonical while `forensic/Cargo.toml` carries its own table, so that crate ran with **no** `unsafe_code`, `unwrap_used`, `expect_used`, `correctness` or `suspicious` — plus `dead_code = "allow"`.
+- **`forensic-hashdb`** has no clippy table anywhere and was absent from the original list entirely.
+- **`livedisk-forensic`** scores canonical at the root while having no panic lints and 2 production sites.
+- **`issen`** is a third instance of the `vmdk` pattern — denies `unwrap_used`, not `expect_used`: **28 production `expect()` sites**.
+
+The lesson matches the `impl Observation` scope error in 2.7: **surveying the aggregation point rather than the effective configuration undercounts systematically, and in the direction of false comfort.**
+
+**A dead-code finding that needs a human answer, not a lint fix.** Dropping `vhdx-forensic`'s `dead_code = "allow"` reveals 6 never-used items — including **`verify_block_crc` and `block_crc`**. Those are block-integrity routines in a VHDX analyzer that nothing calls. Whether block-integrity verification was ever wired up is a question about what the tool actually checks, and it was invisible while the allow stood.
+
+**Propagate this gotcha:** adding `correctness`/`suspicious = "deny"` breaks any manifest carrying bare `lint = "allow"` entries — clippy's `lint_groups_priority` rejects a denied group sharing priority 0 with an individual lint. Every remaining repo with bare allows will hit it.
+
+### 1.5 Two live unsoundness advisories are invisible to the gate meant to catch them
 
 Consolidating the 91 `deny.toml` files surfaced a cargo-deny behaviour that silently disarms part of the advisory gate.
 
@@ -117,7 +141,7 @@ Both repos pass their current gate. Both believe the advisory is dead. **Both st
 
 Fixes are ordinary caret widenings — `lru = "0.16"` (≥0.16.3 patched) and `fuser = "0.16"` — and both advisories begin firing under the unified config, which is how they were found.
 
-### 1.5 Timestamp defects
+### 1.6 Timestamp defects
 
 **DEFECT — wrong-direction saturation.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36`
 
@@ -151,7 +175,7 @@ The finding survives as hardening rather than a live bug: `ExecutionRecord`'s fi
 
 Consumer check, which shaped the remedy: `filetime_to_datetime` has **zero call sites fleet-wide** — dead public API — and `ole_date_to_datetime` has 6, all inside `srum-parser` in the same workspace. So the breaking change is contained to one repo.
 
-### 1.6 Panic-capable and OOB readers
+### 1.7 Panic-capable and OOB readers
 
 | Site | Problem | Live caller today? |
 |---|---|---|
@@ -165,14 +189,14 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 
 **Characterize the forensicnomicon one precisely.** It is an **API-contract defect in a published crate**, not an evidence-driven one: “safe-Rust panic on public API misuse,” not “malicious image crashes the parser.” The distinction matters because ADR-0012's threat model is attacker-controlled *images*, and this guard is not on that path. It is still worth fixing — a guard wrong on its own terms, in the FOUNDATION crate every analyzer depends on — but the severity should not be inflated to match the other two.
 
-### 1.7 Silent test gates
+### 1.8 Silent test gates
 
 **79 of 206 env-gated test sites (38%) skip silently** — an `Option`-returning helper plus a bare early return, with no notice printed. A gate that never fires is indistinguishable from a gate that passed. Concentrations: `SQLITE3_BIN` is 2 loud / 11 silent; `SZECHUAN_DC_MEM` is 0 loud / 7 silent; `AZURE_STORAGE_ACCOUNT` is 0 / 6.
 
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
-### 1.8 Mandate gaps
+### 1.9 Mandate gaps
 
 | Mandate | Compliant | Gap |
 |---|---|---|
