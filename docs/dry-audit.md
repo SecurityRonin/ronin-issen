@@ -209,9 +209,22 @@ If UTF-16 is centralized at all it belongs in **`forensicnomicon`** — already 
 
 GUID handling splits correctly across the two: byte *extraction* via `try_bytes::<16>` above, string *formatting* via the `uuid` crate (2.4), not `safe-read`.
 
-**An unresolved tension the sweep-everything-onto-`safe-read` framing hides.** ADR-0012 says *every* integer read routes through `safe-read`. But `forensicnomicon` is the zero-dependency FOUNDATION leaf, and `safe-read` is a utility leaf — a sibling at the bottom, not something beneath it. Pulling a dependency into FOUNDATION to express a three-line bounds predicate arguably inverts the layering for no gain, which is exactly the call made when fixing the guard above (the fix used a local private `fits` helper, not `safe-read`).
+**FOUNDATION should adopt `safe-read` too — the objection to it does not survive checking.** When the wrapping-guard fix above was implemented, `safe-read` was considered and rejected on the grounds that pulling a dependency into FOUNDATION “inverts the layering.” That reasoning is wrong on the facts. ADR-0016's own Consequences section places `safe-read` **inside FOUNDATION**, alongside `forensicnomicon`:
 
-So the “42 repos should adopt `safe-read`” sweep needs one carve-out decided deliberately rather than by default: **does FOUNDATION itself adopt it, or is `forensicnomicon` a documented exception?** Both answers are defensible; leaving it implicit is what produces a hand-rolled reader in the crate that defines the standard.
+> It holds both domain-knowledge leaves (forensicnomicon, forensic-hashdb) AND generic utility leaves (jsonguard, safe-read, the `forensic-vfs` contract). … **Layer ≠ folder**: in the reorg's physical folders this one layer spans both `knowledge/` (domain facts) and `utility/` (generic libs) — the *layer* (dependency position) and the *folder* (domain grouping) are distinct axes.
+
+`safe-read` is a peer, not something above. The `utility/` folder is what misleads here, and ADR-0016 anticipates precisely that confusion.
+
+The supporting facts all point the same way:
+
+- **`safe-read` has no dependencies at all**, so adoption adds one graph node with no transitive tail — categorically unlike the `uuid` decision in 2.4, which the two superficially resemble.
+- **`forensicnomicon` is not literally a zero-dep leaf today** — `forensicnomicon-core` already depends on `serde` (optional). The FOUNDATION definition is aspirational, not strict.
+- **The empirical case is decisive:** the hand-rolled readers in this very crate produced **seven** wrapping-guard defects in one file (1.3) — exactly the class `safe-read` exists to make impossible.
+- **Credibility:** ADR-0012 mandates `safe-read` for every integer read across 42 repos. That is hard to enforce from the one crate that exempts itself.
+
+**One amendment is genuinely required first.** ADR-0016 states that dependencies flow “down toward FOUNDATION, **never sideways or up**,” and a FOUNDATION→FOUNDATION edge is literally sideways. So ADR-0016 needs a strict *intra*-FOUNDATION ordering: `safe-read` and `jsonguard` are sub-foundation primitives that other FOUNDATION crates may depend on, with nothing depending back up. ADR-0006 already places `safe-read` in the first release wave, so publish order needs no change.
+
+Leaving that ordering implicit is what allowed a hand-rolled reader to survive inside the crate that defines the standard — and what let a reviewer reject the fix on a layering argument the ADR does not actually make.
 
 ### 2.2 FILETIME and epoch conversion — 22 converters, 7 zero-semantics
 
