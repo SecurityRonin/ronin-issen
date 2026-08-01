@@ -133,8 +133,15 @@ Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-
 | Coverage job in CI | 75/91 | 16 repos have none, including forensicnomicon, memory-forensic, winevt-forensic, issen |
 | Secret scan in `ci.yml` | 43/91 | **48 repos** — the largest single policy hole |
 | Fully SHA-pinned actions | **10/91** | 81 repos carry at least one floating tag, most often `dtolnay/rust-toolchain@stable` |
+| SHA pins whose version comment is **true** | see below | **86 repos pin a rust-cache commit that matches no release tag**, labelled `# v2.7.8` |
 | `docs/validation.md` | 70/91 | 21 missing (a stated pre-push gate) |
 | `docs/PRD.md` | 81/91 | 10 missing (a stated pre-push gate) |
+
+**A SHA pin can be sound and still lie about what it pins.** 86 repos pin `Swatinem/rust-cache` at `9bdad043e88c75890e36ad3bbc8d27f0090dd609` with the comment `# v2.7.8`. Verified against the GitHub API: that commit is genuine (2024-05-03, *“fix: usage of `deprecated` version of `node` (#197)”*) but matches **no release tag** — v2.7.3 → `23bce251a8cd`, v2.7.5 → `82a92a6e8fbe`, v2.7.7 → `f0deed1e0edf`, **v2.7.8 → `9d47c6ad4b02`**, v2.8.0 → `98c8021b5502`.
+
+State the severity precisely: **the pin is sound; the provenance label is fiction.** A SHA is immutable, so the supply-chain control is working as designed — this is not a vulnerability. The defect is *traceability*: 86 repos run untagged mid-tree code while asserting a release version, so any audit that answers “are we on released versions?” by reading pin comments gets a wrong answer, and Renovate's digest-pinning cannot cleanly map that SHA back to a version.
+
+This sharpens the row above rather than adding to it. “10 of 91 fully SHA-pinned” understated the problem: of the pinning that *does* exist, the most widely-copied pin in the fleet carries a false version label — and it is copied 86 times, which is itself the scaffolding-duplication finding expressing itself in the supply chain.
 
 **Two further violations surfaced while implementing fixes, not by the sweeps** — both are the kind a file-shaped audit structurally cannot see:
 
