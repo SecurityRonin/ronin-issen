@@ -221,7 +221,17 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
-### 1.9 Oracle differentials that have never run in CI — and the fix was already written
+### 1.9 CSV formula injection — attacker-controlled evidence written unguarded
+
+`parser/leveldb-forensic/leveldb4n6/src/render.rs:45` — `csv_field` quotes a value when it contains `,`, `"`, `\n` or `\r`, and does **nothing else**. There is no neutralization of a leading `=`, `+`, `-` or `@`; a grep for any formula guard in that file returns **zero** matches.
+
+The constitution is explicit that human views must *“formula-guard cells (neutralize leading `=`/`+`/`-`/`@`)”*. Roughly ten CSV output paths carry values that are attacker-controlled **by definition** — `script_key.text`, `value.text`, `host`, `origin`, all carved from evidence. **A carved LevelDB value beginning with `=` becomes a live formula when the examiner opens the CSV in Excel.**
+
+This is the forensic-tool form of the vulnerability: the adversary writes the payload into the artifact, and the tool faithfully hands it to the analyst's spreadsheet.
+
+**The fix already exists and is unadopted.** `utility/jsonguard` publishes exactly the needed helpers — `csv_field` (with the formula guard), `cap_display` (char-safe truncation), `display_safe`, `tsv_safe`, `jsonl_safe` — and **only 4 repos depend on it**, while three CLIs hand-roll a private `csv_field` instead. Same shape as `safe-read`: the fleet built the shared, correct implementation and then did not adopt it, and the unadopted copies are where the defect lives.
+
+### 1.10 Oracle differentials that have never run in CI — and the fix was already written
 
 **Three repos hardcode the macOS-ARM Homebrew path for their oracle binary:**
 
@@ -504,7 +514,7 @@ Found in `timeglyph` while adding `timeglyph-core`, and only by grepping the LCO
 | `category()` overridden despite `Category::from_code` default | 34 of 54 (63%) | The keyword classifier is not pulling its weight |
 | Duplicate canonical-shaped `Severity` enums | 2, both inside issen: `issen-signatures/src/matching/results.rs:36`, `forensic-pivot/src/rule.rs:7` | Real violation — migrate to `forensicnomicon::report::Severity` |
 | `severity_rank` / `severity_token` helpers | **5 copies, not 3** | Consolidated behind a `SeverityExt` trait so upstream inherent methods will shadow it, making the later migration a pure deletion |
-| CLI `OutputFormat` enums | **8 independent**, split vocabulary | `Jsonl` vs `Ndjson`, `Table` vs `Text` — one-concept-one-name violation |
+| CLI `OutputFormat` enums | **narrower than first reported** — of 8: **3 already canonical**, 2 genuinely divergent (fixed), 2 deferred, **1 withdrawn** | `jsonl` canonical on evidence (1,381 occurrences / 20 repos vs 338 / 6), but only **2** repos ever exposed `ndjson` as a CLI value. **`table` vs `text` withdrawn** — `browser-forensic`'s `text` is `render_summary()` (`recover.rs:466`), a narrative render with ranked finding blocks, not a column grid; forcing it onto `table` would misdescribe what it prints. The one real misnaming is `issen-mem`'s `Text`, which dispatches to `print_text_table()`. A *shared* `OutputFormat` enum is the wrong answer: variant sets genuinely differ (`xlsx`/`db`/`txt`, `bodyfile`, `VolRenderer`), so it would be a lowest-common-denominator that rejects advertised values at runtime, or a kitchen sink advertising `xlsx` in a CLI that cannot write one |
 
 Two CLIs ship **no human-readable format at all**: `winevt-cli` (`Json`/`Csv` only) and `srum-cli` (`Json`/`Csv`/`Ndjson`).
 
