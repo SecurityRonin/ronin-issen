@@ -250,9 +250,22 @@ Six sites already delegate the arithmetic to `timeglyph` — the wrappers around
 
 **Formatting is 6-way divergent** — the same FILETIME renders as six different strings and precisions depending on which tool prints it.
 
-**Home crate — corrected recommendation.** `timeglyph` is *not* the right home despite being published (0.9.5) and exposing the conversion. Two blockers: ADR-0016 bars PARSER crates from depending on the utility layer, and timeglyph pins `rust-version = "1.96.0"`, which would break the published parsers' 1.75/1.80 MSRV floors.
+**Home crate — corrected twice; the second correction supersedes the first.**
 
-The correct home is **`forensicnomicon::temporal`** (FOUNDATION), which already owns `FILETIME_EPOCH_OFFSET` and `filetime_to_unix_secs` (`src/temporal.rs:13,18`) and the epoch table that timeglyph itself re-exports (`utility/timeglyph/src/lib.rs:239`). Every analyzer already depends on it, so this reaches all 14 repos without adding a single dependency edge.
+An earlier draft proposed depending on `timeglyph` fleet-wide. A second draft rejected that and proposed `forensicnomicon::temporal` instead. **Both are wrong**, and the second is wrong in a way the audit should have caught: it creates a *second* home for timestamp logic, splitting it between `forensicnomicon` and `timeglyph` — the exact split-brain this report criticizes elsewhere. Time conversion should have one home.
+
+The blockers on `timeglyph` as it stands are real and decisive:
+
+- **Cycle.** `timeglyph/Cargo.toml:77` declares `forensicnomicon = { version = "1.3", default-features = false }` — timeglyph depends on forensicnomicon, so forensicnomicon can never depend on timeglyph. Its own `filetime_to_iso8601` could not move there. (That `default-features = false` is separately an ADR-0013 violation.)
+- **MSRV bleed, already realized.** `protobuf-forensic/protobuf-forensic/Cargo.toml:6` records it plainly: *“Depends on timeglyph (MSRV 1.96), so this crate's floor follows the pinned…”* — a published PARSER crate whose MSRV promise was raised to 1.96 by this dependency.
+- **Weight, including an inherited hazard.** timeglyph carries `jiff = ">=0.2, <0.2.33"`, capped because jiff 0.2.33 panics on out-of-range input instead of returning `Err`. Every consumer inherits that cap.
+- **Consumers are badly stale:** `issen` pins `timeglyph = "0.3"` and `protobuf-forensic` pins `"0.4"` against a published **0.9.5** — layer-1 stale caret, five minor versions behind.
+
+**The correct home is a new `timeglyph-core`**, using the mechanism ADR-0013 already prescribes: *“the lean `<x>-core` library + full `<x>` binary split is the mechanism when a dep is both a library primitive and a heavy tool.”* timeglyph is exactly that — a primitive (epoch arithmetic) and a heavy tool (CLI, MCP, lens GUI, wasm, Python bindings).
+
+`timeglyph-core` holds the pure integer conversions plus the sentinel policy, with **zero dependencies and MSRV 1.75**, registered as a FOUNDATION **primitive** (ADR-0016's PRIMITIVES band). Then `forensicnomicon` may depend on it, parsers may depend on it, and `timeglyph` itself builds on it — one home, no cycle, no MSRV bleed.
+
+**The seam falls naturally: integer arithmetic below, calendar and rendering above.** `(ft - EPOCH_OFFSET) * 100` needs nothing; ISO-8601 formatting needs jiff. This also explains forensicnomicon's hand-rolled civil-date math in `filetime_to_iso8601` — it is reinventing jiff because it cannot depend on it. FOUNDATION should return integers and let callers render, which removes that reimplementation rather than relocating it.
 
 ```rust
 /// None when ft == 0 (the "not set" sentinel), ft < FILETIME_EPOCH_OFFSET,
@@ -382,6 +395,9 @@ The container format set is independently enumerated **4 times** beyond forensic
 
 ### 2.9 Test and docs infrastructure
 
+- **`rot13` — 4+ independent implementations, and the shared home already exists.** `forensicnomicon/crates/core/src/catalog/decode.rs`, `memf-windows/src/userassist.rs:54`, `userassist-forensic/core/src/lib.rs`, `winreg-artifacts/src/userassist.rs`. That UserAssist values are ROT13-encoded is a **format fact**, which ADR-0016's decision rule #1 assigns to `forensicnomicon` — where an implementation already sits. Every consumer depends on FOUNDATION already, so the other three migrate with no new dependency edge and no new crate. `blob-decoder` would be the wrong home (MSRV 1.88, and it sits above these consumers). Missed by the sweeps despite an explicit brief to find decode primitives duplicated 3+ times.
+
+  Worth stating the general test, since “mint a crate” is the tempting answer: a new FOUNDATION crate is justified only by **multiple consumers + a stable contract + a workable dependency direction + nothing existing that fits.** `rot13` fails the last condition. `timeglyph-core` (2.2) passes all four. A six-line function gets a *home*, not a crate.
 - **Cursor structs:** 5 byte-identical `{buf: &[u8], pos: usize}` definitions (winevt `cursor.rs:31`, leveldb-core `bytes.rs:11`, protobuf `reader.rs:15`, trash `macos.rs:261`, state-history `identity.rs:308`) plus 2 extended.
 - **`corpus_dir()`** copy-pasted across 5 repos.
 - **187 distinct env-gate variable names** with no grammar: `_ORACLE` × 25, `_ORACLE_IMAGE` × 3, `_ORACLE_IMG` × 3, `_IMAGE` × 4, `_IMG` × 1, `_FIXTURE` × 3, `_BIN` × 5, and 105 unclassifiable.
