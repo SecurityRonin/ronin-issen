@@ -46,6 +46,29 @@ Every claim below is **Tier 2**: derived by reading source and running measureme
 
 ---
 
+## The through-line: green signals over work that never happened
+
+The single pattern this audit surfaced most often is not duplication. It is a **check reporting success over something it did not actually do** — and it recurred in seven independent places, found by seven different lines of inquiry:
+
+| Where | The green signal | What was actually happening |
+|---|---|---|
+| **Branch protection** (1.3) | Every CI check passing | 9 of 10 repos have no required checks, so nothing was gated at all |
+| **cargo-deny advisories** (1.5) | `advisories ok` | `informational = "unsound"` silently skipped under the default `unmaintained` setting — two live memory-safety advisories invisible |
+| **Coverage gate** (2.6) | `Coverage (100% lines)` OK | `cargo llvm-cov report` emitted **no `SF:` record at all** for a new workspace member; the line half passed over zero measured lines |
+| **Coverage scope** (2.6) | `Coverage (100% lines)` OK | `--lib` with no features left 37 lines of `ntfs-forensic`'s `vfs` adapter outside the measurement entirely |
+| **MSRV job** (during `timeglyph-core`) | MSRV verified | Bare `cargo` compiled on **1.96** while the job claimed 1.75 — `RUSTUP_TOOLCHAIN` outranks a directory override |
+| **Oracle tests** (1.8) | Suite green | 79 of 206 env-gated sites skip **silently**; a gate that never fires is indistinguishable from one that passed |
+| **`shellitem` README** (1.1) | “fuzzed over `parse_idlist`” | No fuzz target ever existed |
+
+Two more appeared *inside the verification work itself*, and are recorded because they show the pattern is not confined to the fleet's CI:
+
+- An equivalence test asserting `h.severity()` against `d.severity()` bound **both** calls to hand-written inherent methods — inherent methods shadow trait methods, so the derive under test was never exercised. Fixed by routing every trait-level assertion through UFCS.
+- A negative-control mutation reported all tests passing because `rustfmt` had reshaped the target block and the string replace never applied. Caught only by an `assert old in text` guard inside the mutation script. Without it, a green negative control that never ran would have been reported — worse than no control at all.
+
+**The generalization worth keeping:** *logging is not asserting, and passing is not checking.* A gate must be able to fail for the reason it exists, and the only way to know it can is to make it fail on purpose. Every instance above was found by looking at the artifact — the LCOV file, the resolved toolchain, the mutated source — rather than at the summary line. Several of the consolidations recommended in this report are worth doing largely because they replace seven differently-broken gates with one whose failure mode is known.
+
+---
+
 ## Part 1 — Correctness and integrity findings
 
 These are not DRY findings. They surfaced during the sweep and outrank it.
