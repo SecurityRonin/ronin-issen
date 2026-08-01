@@ -18,7 +18,7 @@ Three findings outrank everything else and are not really DRY findings at all:
 
 2. **Two timestamp converters with wrong edge behavior — both latent, neither reachable today.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36` saturates *negative* overflow to `i64::MAX`, so a zero FILETIME would sort at the far end of a super-timeline instead of reading as absent; it has no non-test callers. `parser/prefetch-forensic/forensic/src/bin/prefetch4n6.rs:68` has no zero guard and returns `Some("1601-01-01T00:00:00Z")` for an unset value; `prefetch-core` filters non-positive FILETIMEs upstream (`core/src/lib.rs:159`), so the binary's `-` fallback already fires correctly. Both are wrong functions guarded by circumstance, not by their own contract.
 
-3. **A panic-capable reader in a Paranoid-Gatekeeper crate.** `container/vmdk-forensic/core/src/bytes.rs:6` panics on any input shorter than four bytes, in a crate whose stated contract is that malformed images never panic. It has **no live caller today** (see 1.3), so this is a latent hazard rather than an active bug — but it sits in published API of a crate that forbids exactly this.
+3. **A panic-capable reader in a Paranoid-Gatekeeper crate.** `container/vmdk-forensic/core/src/bytes.rs:6` panics on any input shorter than four bytes, in a crate whose stated contract is that malformed images never panic. It has **no live caller today** (see 1.4), so this is a latent hazard rather than an active bug — but it sits in published API of a crate that forbids exactly this.
 
 Beneath those, the headline DRY finding is broader than a count of duplicated files. **205 hand-rolled fixed-width integer readers exist across 47 repos**, and **42 of those repos carry no `safe-read` dependency at all** — against ADR-0012, which states every integer read goes through `safe-read` and never a hand-rolled `bytes.rs`. The shared crate is published (0.2.1) and healthy; adoption simply never happened. Only 12 repos declare it, two of those declare it without a single call site, and one (`ntfs-forensic`) is split-brain, using `safe_read::` in four modules while eight others still use its own identical local copy.
 
@@ -42,7 +42,7 @@ Encouragingly, the fleet has already proved it can converge when a mechanism exi
 
 Every claim below is **Tier 2**: derived by reading source and running measurement commands over the working tree. Nothing was validated by executing the fleet's binaries against evidence images. Counts are measured, not estimated; where a measurement was wrong, the correction is noted rather than quietly replaced. Claims about semantic *consequence* (for example, “this would misplace an event in a timeline”) are inferences from reading the code path, not observed failures — they are stated as consistent-with, and the two marked **DEFECT** below warrant a reproducing test before any fix is called complete.
 
-**Adversarial verification pass.** A second reviewer independently re-derived the load-bearing claims — reading the cited function bodies, running `cargo deny check --help`, and re-counting from the working tree. It **confirmed exactly**: 91 repos; 17 `bytes.rs` files summing 1,385 lines; 12 real `safe-read` dependencies; `channel = "1.96.0"` in all 90 `rust-toolchain.toml` files with no exceptions; the `46 + 17 → 54` `impl Observation` arithmetic; 6 of 7 rows of the FILETIME zero-semantics table at the cited line numbers; both defects in 1.2; the whole shellitem finding; and both Part 4 tool-capability corrections. It **rejected three claims**, all now corrected in place: the GUID-join consequence (2.4), the vmdk panic mechanism and its implied live risk (1.3), and the snapshot-forensic tense claim (1.1). One figure could not be reproduced at stated precision and is flagged where it appears (2.1).
+**Adversarial verification pass.** A second reviewer independently re-derived the load-bearing claims — reading the cited function bodies, running `cargo deny check --help`, and re-counting from the working tree. It **confirmed exactly**: 91 repos; 17 `bytes.rs` files summing 1,385 lines; 12 real `safe-read` dependencies; `channel = "1.96.0"` in all 90 `rust-toolchain.toml` files with no exceptions; the `46 + 17 → 54` `impl Observation` arithmetic; 6 of 7 rows of the FILETIME zero-semantics table at the cited line numbers; both defects in 1.2; the whole shellitem finding; and both Part 4 tool-capability corrections. It **rejected three claims**, all now corrected in place: the GUID-join consequence (2.4), the vmdk panic mechanism and its implied live risk (1.4), and the snapshot-forensic tense claim (1.1). One figure could not be reproduced at stated precision and is flagged where it appears (2.1).
 
 ---
 
@@ -70,7 +70,27 @@ The README was rewritten rather than left alone, even though the original senten
 
 **Not a comparable instance — recorded so it is not re-raised.** `snapshot-forensic/README.md:36` reads “both crates are `#![forbid(unsafe_code)]`, **will be** panic-free against attacker-controllable input, fuzzed with `cargo-fuzz`, and validated against real artifacts plus an independent oracle.” The “will be” is a shared auxiliary governing all three coordinated predicates — standard English ellipsis, not mixed tense. Every format-support row in that README is marked “planned,” and no fuzz target exists, which is consistent. This is an aspirational README for an unimplemented crate, **not a false claim**, and it should not be filed alongside the shellitem finding.
 
-### 1.2 Timestamp defects
+### 1.2 Seventeen repos publish a Terms of Service naming the wrong licence
+
+**`docs/terms.md` states MIT in 17 repos whose `LICENSE` file and `Cargo.toml` both say Apache-2.0.** Spot-verified on five independently:
+
+| Repo | `docs/terms.md` | `LICENSE` | `Cargo.toml` |
+|---|---|---|---|
+| `ewf-forensic` | **MIT** | Apache License | `Apache-2.0` |
+| `ext4fs-forensic` | **MIT** | Apache License | `Apache-2.0` |
+| `srum-forensic` | **MIT** | Apache License | `Apache-2.0` |
+| `blazehash` | **MIT** | Apache License | `Apache-2.0` |
+| `lzo` | **MIT** | Apache License | `Apache-2.0` |
+
+Also affected: all three partition repos, among 17 total. `lzo` and `lzvn` go further and say the work is *“governed solely by that licence,”* pointing at a licence they do not ship.
+
+**This is almost certainly stale residue, not a licensing dispute.** The constitution records that the fleet *“standardized on **Apache-2.0** for its explicit patent grant — migrate any residual MIT repos.”* The `LICENSE` files and manifests were migrated; these `terms.md` files were not. Two independent sources agree against the third.
+
+It is recorded in Part 1 rather than among the DRY findings because it is not duplication — it is a **published legal document making a false statement about the terms a user receives the software under**, on 17 public repositories. Every DRY finding in this report is a maintenance cost; this one is an assertion to third parties that does not match the shipped licence.
+
+Structural remedy, beyond correcting the text: the legal-doc generator derives the licence from `Cargo.toml`/`LICENSE` and **the template cannot override it**, so a rendered document is incapable of disagreeing with the shipped licence. That is the secure-by-design form of the fix — the wrong state becomes unrepresentable rather than merely corrected once.
+
+### 1.3 Timestamp defects
 
 **DEFECT — wrong-direction saturation.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36`
 
@@ -104,7 +124,7 @@ The finding survives as hardening rather than a live bug: `ExecutionRecord`'s fi
 
 Consumer check, which shaped the remedy: `filetime_to_datetime` has **zero call sites fleet-wide** — dead public API — and `ole_date_to_datetime` has 6, all inside `srum-parser` in the same workspace. So the breaking change is contained to one repo.
 
-### 1.3 Panic-capable and OOB readers
+### 1.4 Panic-capable and OOB readers
 
 | Site | Problem | Live caller today? |
 |---|---|---|
@@ -118,14 +138,14 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 
 **Characterize the forensicnomicon one precisely.** It is an **API-contract defect in a published crate**, not an evidence-driven one: “safe-Rust panic on public API misuse,” not “malicious image crashes the parser.” The distinction matters because ADR-0012's threat model is attacker-controlled *images*, and this guard is not on that path. It is still worth fixing — a guard wrong on its own terms, in the FOUNDATION crate every analyzer depends on — but the severity should not be inflated to match the other two.
 
-### 1.4 Silent test gates
+### 1.5 Silent test gates
 
 **79 of 206 env-gated test sites (38%) skip silently** — an `Option`-returning helper plus a bare early return, with no notice printed. A gate that never fires is indistinguishable from a gate that passed. Concentrations: `SQLITE3_BIN` is 2 loud / 11 silent; `SZECHUAN_DC_MEM` is 0 loud / 7 silent; `AZURE_STORAGE_ACCOUNT` is 0 / 6.
 
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
-### 1.5 Mandate gaps
+### 1.6 Mandate gaps
 
 | Mandate | Compliant | Gap |
 |---|---|---|
@@ -226,7 +246,7 @@ The supporting facts all point the same way:
 
 - **`safe-read` has no dependencies at all**, so adoption adds one graph node with no transitive tail — categorically unlike the `uuid` decision in 2.4, which the two superficially resemble.
 - **`forensicnomicon` is not literally a zero-dep leaf today** — `forensicnomicon-core` already depends on `serde` (optional). The FOUNDATION definition is aspirational, not strict.
-- **The empirical case is decisive:** the hand-rolled readers in this very crate produced **seven** wrapping-guard defects in one file (1.3) — exactly the class `safe-read` exists to make impossible.
+- **The empirical case is decisive:** the hand-rolled readers in this very crate produced **seven** wrapping-guard defects in one file (1.4) — exactly the class `safe-read` exists to make impossible.
 - **Credibility:** ADR-0012 mandates `safe-read` for every integer read across 42 repos. That is hard to enforce from the one crate that exempts itself.
 
 **One amendment is genuinely required first.** ADR-0016 states that dependencies flow “down toward FOUNDATION, **never sideways or up**,” and a FOUNDATION→FOUNDATION edge is literally sideways. So ADR-0016 needs a strict *intra*-FOUNDATION ordering: `safe-read` and `jsonguard` are sub-foundation primitives that other FOUNDATION crates may depend on, with nothing depending back up. ADR-0006 already places `safe-read` in the first release wave, so publish order needs no change.
@@ -247,7 +267,7 @@ The duplication is in the **edge policy**, re-decided 22 times. For input `0` �
 | `0` (i.e. 1970) | 2 | lnk `lib.rs:222`, issen-parser-evtx `:448` |
 | Clamped `1970-01-01` | 1 | srum-core `lib.rs:55` |
 | `"-"` | 1 | memory-forensic `main.rs:2059` |
-| `i64::MAX` | 1 | issen-correlation `temporal_checks.rs:28` (**DEFECT**, see 1.2) |
+| `i64::MAX` | 1 | issen-correlation `temporal_checks.rs:28` (**DEFECT**, see 1.3) |
 
 When these converge in issen's DuckDB super-timeline, “no timestamp” becomes representation-dependent: genuine absence, plus three distinct fabricated instants (1601, 1677/`i64::MIN`, 1970).
 
@@ -469,7 +489,7 @@ Two prior claims **survived** verification: the `bytes.rs`-versus-`safe-read` fi
 **Immediate — small local edits, no coordination:**
 
 1. `issen-correlation/src/temporal_checks.rs:36` — saturate negatives to `i64::MIN`, or return `Option`.
-2. `prefetch4n6.rs:68` — add the zero guard. Hardening, not a hotfix: upstream filtering makes the bad path unreachable today (see 1.2).
+2. `prefetch4n6.rs:68` — add the zero guard. Hardening, not a hotfix: upstream filtering makes the bad path unreachable today (see 1.3).
 3. `srum-core/src/lib.rs:55,65` — return `Option<Timestamp>` instead of clamping to `UNIX_EPOCH`.
 4. `vmdk-forensic/core/src/bytes.rs:6` — replace the `b[..4]` slice index with a bounds-checked read (and drop the unreachable `.expect()`). No live caller, so this is hygiene, not a hotfix.
 5. `forensicnomicon/crates/core/src/catalog/decode.rs:85-99` — use `checked_add` in the guard.
@@ -517,7 +537,7 @@ Reported false-positive rates: the raw `extension()` grep was ~97% false-positiv
 |---|---|
 | Divergent GUID formatting “breaks string-equality joins in issen's correlation layer” (2.4) | No such join exists — `issen-correlation/` contains no GUID reference at all |
 | `prefetch4n6` “prints `1601-01-01…` for an unset run-slot” (1.2) | `prefetch-core` filters non-positive FILETIMEs upstream, so the path is unreachable |
-| `vmdk-forensic`'s reader “panics on any input shorter than 4 bytes” (1.3) | True of the function; `chunks_exact(4)` means no caller can supply short input |
+| `vmdk-forensic`'s reader “panics on any input shorter than 4 bytes” (1.4) | True of the function; `chunks_exact(4)` means no caller can supply short input |
 
 The first draft *did* apply this check to the issen saturation defect (“no non-test callers… but it is published API”) and then failed to apply it to the next three findings, while stating them with equal or greater confidence. Reading a function body proves what the function does; it does not prove anything reaches it. Both questions have to be asked, and the answer to the second belongs in the finding — a wrong function guarded by circumstance is still worth fixing, but it is not an active bug and should not be sold as one.
 
