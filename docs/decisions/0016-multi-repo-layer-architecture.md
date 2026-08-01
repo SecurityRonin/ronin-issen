@@ -21,7 +21,9 @@ navigation primitives**, and that the crate that *interprets* an artifact
 
 ```
 FOUNDATION      zero-dep artifact specs / format constants / contract traits
-                 forensicnomicon, state-history-forensic, jsonguard
+                 · PRIMITIVES (sub-foundation, strictly lowest): safe-read, jsonguard
+                 · KNOWLEDGE + CONTRACTS: forensicnomicon, state-history-forensic,
+                   forensic-hashdb, the forensic-vfs contract
 CONTAINER      decode a raw source format → addressable data stream
                  ewf, vhdx, dd, segb-core, memf-format, (vmdk/qcow2/iso/aff4/dmg … planned)
 FILESYSTEM     navigate a sector stream by path (name→inode→block)
@@ -64,6 +66,13 @@ store *is* the entry point.)
 
 ### Dependency rules (the load-bearing part)
 
+- **Within FOUNDATION there is one strict ordering: PRIMITIVES sit below KNOWLEDGE +
+  CONTRACTS.** A knowledge/contract leaf (forensicnomicon, state-history-forensic,
+  forensic-hashdb) MAY depend on a primitive (`safe-read`, `jsonguard`); a primitive
+  MUST NOT depend on anything, inside FOUNDATION or out. This is the *only* sanctioned
+  intra-layer edge in the fleet, and it is what makes ADR-0012's "every integer read
+  goes through `safe-read`" apply to FOUNDATION itself rather than exempting it.
+  Primitives stay zero-dependency so the edge can never become a cycle.
 - CONTAINER depends on FOUNDATION only.
 - FILESYSTEM / PAGING / OS STRUCTURE / LOG FORMAT depend on their container + FOUNDATION.
 - OS STRUCTURE (memf-windows) MAY call PARSER repos when it locates artifact bytes in
@@ -118,7 +127,19 @@ FORMAT / QUERY ENGINE layer that located the artifact — never inside the parse
   both `knowledge/` (domain facts) and `utility/` (generic libs) — the *layer*
   (dependency position) and the *folder* (domain grouping) are distinct axes.
 - Every capability has exactly one home, and the dependency direction is
-  unambiguous (down toward FOUNDATION, never sideways or up).
+  unambiguous (down toward FOUNDATION, never up, and sideways **only** on the one
+  sanctioned PRIMITIVES edge inside FOUNDATION described in the dependency rules).
+- **Amendment (2026-08-01) — the FOUNDATION PRIMITIVES band.** Originally this ADR
+  described FOUNDATION as a flat tier of zero-dep leaves and forbade sideways edges
+  outright. That left the ordering *between* FOUNDATION members undefined, and the
+  cost was concrete: `forensicnomicon` kept hand-rolled bounds-checked readers in
+  `catalog/decode.rs` that reimplemented `safe-read`'s published API — same
+  `(data, offset)` signature, same "0 when out of range" contract — and accumulated
+  seven wrapping `offset + N > len` guards, the exact defect class `safe-read` exists
+  to prevent. Reviewers twice rejected adopting `safe-read` on the grounds that it
+  would "invert the layering," reasoning from its `utility/` folder despite the
+  Layer ≠ folder note below. Naming the PRIMITIVES band makes the correct dependency
+  legal and explicit instead of re-derived (and re-derived wrongly) per review.
 - PARSER repos are reusable across every medium for free, because they never learn
   where their bytes came from — the single most important invariant this ADR protects.
 - **Release/publish order follows this graph bottom-up** — see
