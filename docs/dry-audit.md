@@ -412,7 +412,7 @@ Found in `timeglyph` while adding `timeglyph-core`, and only by grepping the LCO
 
 | Component | Measure | Verdict |
 |---|---|---|
-| Variant → constant match arms in `severity()`/`code()`/`category()`/`mitre()` | **157 arms, 661 lines (27% of all impl-body code)** | Accidental — `#[derive(Observation)]` candidate |
+| Variant → constant match arms in `severity()`/`code()`/`category()`/`mitre()` | **714 arms, 1,583 lines (30.3% of a 5,226-line surface)** — see the scope correction below | Accidental — `#[derive(Observation)]` candidate, **validated** |
 | Pure-delegation impls (`Some(self.severity)`, `self.code`) | ≥8 crates (the `findings.rs` group) | Accidental — shared struct + blanket impl |
 | `category()` overridden despite `Category::from_code` default | 34 of 54 (63%) | The keyword classifier is not pulling its weight |
 | Duplicate canonical-shaped `Severity` enums | 2, both inside issen: `issen-signatures/src/matching/results.rs:36`, `forensic-pivot/src/rule.rs:7` | Real violation — migrate to `forensicnomicon::report::Severity` |
@@ -420,6 +420,23 @@ Found in `timeglyph` while adding `timeglyph-core`, and only by grepping the LCO
 | CLI `OutputFormat` enums | **8 independent**, split vocabulary | `Jsonl` vs `Ndjson`, `Table` vs `Text` — one-concept-one-name violation |
 
 Two CLIs ship **no human-readable format at all**: `winevt-cli` (`Json`/`Csv` only) and `srum-cli` (`Json`/`Csv`/`Ndjson`).
+
+**Measurement correction — the original figures counted the wrong surface.** An earlier pass reported 157 mechanical arms / 661 lines / 27%, derived by parsing `impl Observation` bodies. That scope is wrong: **27 of the 58 `Observation` impls are on structs whose bodies read `{ self.code }` or `{ AnomalyKind::code(self) }`**, with the actual `match` living in an *inherent* `impl AnomalyKind` elsewhere in the file. Scoping to the trait impl sees the delegation, not the boilerplate — of 54 mechanical `code` matches, **38 are in inherent impls**.
+
+Re-measured with a brace-balancing parser over both trait and inherent impls, classifying a body as mechanical only when every arm's right-hand side is a literal:
+
+| | as first reported | measured |
+|---|---|---|
+| metadata surface | 2,469 lines | **5,226 lines** |
+| mechanical arms | 157 | **714** |
+| mechanical lines | 661 | **1,583** |
+| share | 27% | **30.3%** |
+
+**Savings measured, not projected:** real rustfmt'd before/after on four enums gives **124 → 62 lines (50%)**, not the naive 74% — rustfmt explodes a four-key attribute across ~6 lines when the code string is long. Fleet extrapolation ≈ **800 lines net**. The better measure of the burden is the arm count: **714 hand-maintained parallel arms collapse to 419 single-site declarations.**
+
+The by-design boundary held exactly under re-measurement: `note` (86 fns), `evidence` (46) and `subjects` (13) are **0% mechanical** — not one is a literal-per-variant match.
+
+**`Category::from_code` is not earning its place, and has a concrete bug.** Measured against real data: it agrees with **31 of 100** recovered `(code, explicit category)` pairs, and **68 of the 69 disagreements return `Structure`** — which is also its `else` branch, so it is falling through rather than misclassifying. Checking the other side to control for selection bias: across the 27 types that *accept* the default over 311 distinct codes, it assigns `Structure` to **246 (79%)** — including `APFS-DELETED-INODE-RECOVERABLE` (Residue), `APFS-SNAPSHOT-DIVERGENCE` (History) and `ZIP-NAME-TRAVERSAL` (Threat). The keyword list contains `CHECKSUM` but not `CKSUM`, so **`APFS-OBJECT-CKSUM-MISMATCH` is classified `Structure` rather than `Integrity`**. Treat `from_code` as a compatibility shim; the derive migration is the natural moment to make category explicit and then consider deprecating it.
 
 **Anomaly-code namespace — one real problem.** There are **zero cross-crate code collisions**; 17 apparent ones were traced and all cleared (GPT partition-type GUIDs, CVE ids, `#[cfg(test)]` fixtures, issen test assertions). Casing convention is clean fleet-wide. However:
 
