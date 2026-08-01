@@ -61,6 +61,13 @@ These are not DRY findings. They surfaced during the sweep and outrank it.
 
 ADR-0012 requires a fuzz target for untrusted-input parsers regardless, so the remedy is to add the target and make the sentence true — not to delete the sentence.
 
+**Resolved.** Two targets now exist and have been run: `idlist` (`parse_idlist` alone — framing loop, class dispatch, per-class decoders, the `0xbeef0004` extension block) at **8,229,495 executions**, and `pipeline` (`parse_idlist` → `reconstruct_path` → `display_name`) at **9,131,724 executions**. **No crashes.** Two targets cover the whole surface because the crate exports exactly two public functions.
+
+The README was rewritten rather than left alone, even though the original sentence had become literally true. Two reasons, both worth recording:
+
+- **Measured wording beats a bare adjective** — it now uses the fleet's paired-bullet form: a *Fuzzed* bullet naming both targets with exec counts, beside a *Panic-free by lint* bullet carrying the static posture. The result is stated as “no crashes in N executions” with the budget spelled out — present-robustness evidence over the inputs libFuzzer reached, never “fuzzed, therefore panic-free.”
+- **The same sentence carried a second factual error.** It cited `#![forbid(unsafe_code)]` as an inner attribute; the lint is actually declared in `Cargo.toml` under `[lints.rust]`. Identical guarantee, but anyone grepping for the attribute would have found nothing and concluded the claim was false.
+
 **Not a comparable instance — recorded so it is not re-raised.** `snapshot-forensic/README.md:36` reads “both crates are `#![forbid(unsafe_code)]`, **will be** panic-free against attacker-controllable input, fuzzed with `cargo-fuzz`, and validated against real artifacts plus an independent oracle.” The “will be” is a shared auxiliary governing all three coordinated predicates — standard English ellipsis, not mixed tense. Every format-support row in that README is marked “planned,” and no fuzz target exists, which is consistent. This is an aspirational README for an unimplemented crate, **not a false claim**, and it should not be filed alongside the shellitem finding.
 
 ### 1.2 Timestamp defects
@@ -367,6 +374,7 @@ The container format set is independently enumerated **4 times** beyond forensic
 - **187 distinct env-gate variable names** with no grammar: `_ORACLE` × 25, `_ORACLE_IMAGE` × 3, `_ORACLE_IMG` × 3, `_IMAGE` × 4, `_IMG` × 1, `_FIXTURE` × 3, `_BIN` × 5, and 105 unclassifiable.
 - **Test-data catalog has drifted:** 61 repos have `tests/data/`, 55 have a README, 6 lack one; the fleet catalog names only 51 repos, and **16 repos with a `tests/data/README.md` are absent from the catalog entirely**.
 - **README footer:** 4 repos render “Security Ronin Ltd.” with a trailing period; `forensic-carve` has no footer at all.
+- **Copied scaffolding rots in place — a concrete instance.** `shellitem/CONTRIBUTING.md` instructed contributors to run `cargo +nightly fuzz run shelllink   # or: forensic` — **`lnk-forensic`'s target names**, carried over when the scaffolding was copied and never updated, in a repo that had no fuzz targets at all. Its ADR 0003 and `docs/PRD.md` likewise both claimed no `ci.yml` existed, which had been stale for some time. This is what the 89-variant `ci.yml` and 63-variant `privacy.md` counts look like at the level of a single file: the copy is made once, the original moves on, and nothing detects the divergence. Instructions that name another repo's artifacts are the highest-signal tell.
 - **Coverage badges:** the constitution mandates a Codecov badge row; **zero Codecov badges exist fleet-wide**, and only 2 repos carry any coverage badge (static shields). The standard is unenforced — either enforce it or relax it.
 
 ---
