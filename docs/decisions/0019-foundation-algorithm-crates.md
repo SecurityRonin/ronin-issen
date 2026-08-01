@@ -80,11 +80,54 @@ decoding could not be added to `safe-read`.
 **`safe-decode` membership test — all four required:** panic-free · allocating · format-agnostic ·
 no domain knowledge.
 
-- **Passes:** `rot13`; the `decode_utf16le` family (all four NUL policies, each *explicitly
-  named* rather than collapsed into one function — see the audit §2.3); `MultiSz`; `MruListEx`;
-  hex formatting.
-- **Fails:** FILETIME conversion (temporal — `timeglyph-core`); ESE (has its own crate); anything
-  needing a format catalog.
+**Refinement, from applying it in practice.** "Can this be described without naming Windows?" is a
+useless question — almost anything can be. The decidable form is:
+
+> **Would this still be correct for a format I have never seen that shares the structure?**
+
+That is the No-Special-Cases discipline applied to crate membership. Splitting a UTF-16 buffer on
+NUL code units: yes, any format with that structure. Stopping at a *double* NUL and discarding the
+tail: only for formats that happen to agree with the Windows registry. `0xFFFFFFFF` as a list
+terminator: no — that is one vendor's convention wearing a structural costume.
+
+**Worked example — `MultiSz` splits along that line; `MruListEx` fails it outright.**
+
+- `split_utf16le_on_nul` / `split_utf16be_on_nul` are **in**: total and structural, `n` NULs yield
+  `n + 1` segments, empty ones included. They describe the bytes and assert nothing about them.
+- The `REG_MULTI_SZ` *convention* is **out** — that a double NUL terminates, that trailing empties
+  are padding rather than data. Those are registry facts, and the caller composes them in one line
+  in the crate where the fact already lives.
+- `MruListEx` is **out entirely**. Generalizing to `read_u32le_list_until(bytes, sentinel)` would
+  produce a function whose whole content is three iterator combinators over `safe_read::le_u32` —
+  no bounds risk to centralize, no divergent behaviour to converge, no defect class prevented. It
+  fails the domain-knowledge condition on the sentinel *and* the worth-a-shared-home bar on
+  triviality.
+
+The deciding consideration is §3's own warning: admitting a named constant from one vendor's
+format would make "no domain knowledge" **negotiable**, and a primitive crate whose membership
+test is negotiable becomes precisely the junk drawer one layer down that this ADR exists to
+prevent. Excluding it is what keeps the test decidable.
+
+**Close the matrix, do not ship only the used cells.** `safe-decode` provides all 8 endianness ×
+NUL-policy combinations rather than the 5 with a current consumer. Endianness affects only the
+byte-pair → code-unit step and is orthogonal to NUL policy; **a hole in a primitive gets filled by
+hand at the call site, which is how fourteen UTF-16 decoders came to exist in the first place.**
+
+- **Passes:** `rot13`; the UTF-16 family (all four NUL policies × both endiannesses, each
+  *explicitly named* rather than collapsed behind a policy flag — see the audit §2.3); hex
+  formatting; the structural half of `MultiSz` (NUL splitting).
+- **Fails:** FILETIME conversion (temporal — `timeglyph-core`); ESE (has its own crate);
+  `MruListEx` and the `REG_MULTI_SZ` terminator convention (registry facts); anything needing a
+  format catalog.
+
+**Lossiness is part of the return type, not a lost detail.** UTF-16 decoding returns a struct
+carrying `unpaired_surrogates: usize` and `dangling_byte: bool`, not a bare `String`. This
+follows the fleet rule that return types carry security-relevant state — and it *splits*
+`leveldb-forensic`'s single `lossy: bool`, because that bool conflates two different forensic
+findings: a mangled surrogate is a text-encoding defect, while an odd input length is a
+structural anomaly in the record. A count rather than a flag lets a report say *how much* was
+lost. `#[non_exhaustive]` means a consumer cannot fabricate a non-lossy result via a struct
+literal.
 
 **`timeglyph-core` exists because `timeglyph` is both a library primitive and a heavy tool** —
 CLI, MCP server, lens GUI, wasm and Python bindings. [ADR-0013](0013-batteries-included.md)
