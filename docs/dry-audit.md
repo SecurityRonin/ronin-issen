@@ -495,7 +495,7 @@ Found in `timeglyph` while adding `timeglyph-core`, and only by grepping the LCO
 | Pure-delegation impls (`Some(self.severity)`, `self.code`) | ≥8 crates (the `findings.rs` group) | Accidental — shared struct + blanket impl |
 | `category()` overridden despite `Category::from_code` default | 34 of 54 (63%) | The keyword classifier is not pulling its weight |
 | Duplicate canonical-shaped `Severity` enums | 2, both inside issen: `issen-signatures/src/matching/results.rs:36`, `forensic-pivot/src/rule.rs:7` | Real violation — migrate to `forensicnomicon::report::Severity` |
-| `severity_rank` / `severity_token` helpers | 3+ near-identical | Add `Severity::rank()` / `Severity::token()` upstream |
+| `severity_rank` / `severity_token` helpers | **5 copies, not 3** | Consolidated behind a `SeverityExt` trait so upstream inherent methods will shadow it, making the later migration a pure deletion |
 | CLI `OutputFormat` enums | **8 independent**, split vocabulary | `Jsonl` vs `Ndjson`, `Table` vs `Text` — one-concept-one-name violation |
 
 Two CLIs ship **no human-readable format at all**: `winevt-cli` (`Json`/`Csv` only) and `srum-cli` (`Json`/`Csv`/`Ndjson`).
@@ -519,7 +519,13 @@ The by-design boundary held exactly under re-measurement: `note` (86 fns), `evid
 
 **Anomaly-code namespace — one real problem.** There are **zero cross-crate code collisions**; 17 apparent ones were traced and all cleared (GPT partition-type GUIDs, CVE ids, `#[cfg(test)]` fixtures, issen test assertions). Casing convention is clean fleet-wide. However:
 
-- **issen mints codes in `ntfs-forensic`'s namespace**, and worse, names the same phenomenon twice: issen emits `"NTFS-TIMESTOMP-SI-FN-MISMATCH"` (`issen-correlation/src/timestomp.rs:30`) while ntfs-forensic emits `"NTFS-TIMESTOMP"` (`ntfs-forensic/forensic/src/lib.rs:183`). **A consumer grouping findings by code counts one detection as two.** issen already owns `CORR-` and `HEUR-` prefixes covering 32 of its 71 codes.
+- **issen mints codes in `ntfs-forensic`'s namespace.** **Correction:** an earlier draft claimed `"NTFS-TIMESTOMP-SI-FN-MISMATCH"` (`issen-correlation/src/timestomp.rs:30`) and `"NTFS-TIMESTOMP"` (`ntfs-forensic/forensic/src/lib.rs:183`) name the same phenomenon, so a consumer would count one detection as two. **That was inferred from the identifiers, not from the implementations, and reading both refutes it.**
+
+  ntfs-forensic tests `si.created < file_name.created` strictly, ORs in an *unconditional* whole-second check on any `$SI` timestamp, always grades `High`, and works from parsed MFT attributes. issen tolerance-gates the same ordering, adds a signal ntfs-forensic lacks entirely (`si_modified < fn_created`), and — decisively — its third signal requires the **contrast**: `$FN` must carry sub-second precision *and* `$SI` must be whole-second. A whole-second `$FN` “carries no precision to contradict, so it does not corroborate.” **ntfs-forensic fires on exactly the case issen deliberately suppresses.** issen also applies benign-context modifiers (copy, volume-move, high-FP path) and is **capped at `Medium` by design**, its own docs calling this “the weakest signal in the literature.”
+
+  So the codes are correctly distinct, and consolidating them would make an Info-tier lead indistinguishable from a High-tier filesystem anomaly.
+
+  **The real defect is narrower and sharper than squatting.** ntfs-forensic already ships **six** `NTFS-` codes, and **issen consumes all six** — which makes issen precisely the crate that must not also mint into that namespace. The old string was a strict **prefix-extension** of a shipped code, so prefix-grouping conflated them. Resolved as `HEUR-TIMESTOMP-SI-FN` and `HEUR-BOOT-BACKUP-MISMATCH`, both now named constants asserted through the constant rather than a literal. (`NTFS-BOOT-BACKUP-MISMATCH` had no ntfs-forensic counterpart at all — pure encroachment — though the check itself belongs upstream in FILESYSTEM per ADR-0016.)
 - `parser/ese-forensic/crates/ese-integrity` owns 14 `SRUM-*` codes while a separate `srum-forensic` repo exists. No collision today; nothing prevents one.
 - Uniqueness is currently an accident of discipline across ~450 code literals. A cheap structural fix: each crate exposes `pub const CODES: &[&str]`, issen aggregates and asserts uniqueness in a test.
 
