@@ -90,7 +90,17 @@ It is recorded in Part 1 rather than among the DRY findings because it is not du
 
 Structural remedy, beyond correcting the text: the legal-doc generator derives the licence from `Cargo.toml`/`LICENSE` and **the template cannot override it**, so a rendered document is incapable of disagreeing with the shipped licence. That is the secure-by-design form of the fix — the wrong state becomes unrepresentable rather than merely corrected once.
 
-### 1.3 Two live unsoundness advisories are invisible to the gate meant to catch them
+### 1.3 Renovate automerges into `main` with nothing blocking it
+
+**Measured across a 10-repo sample: 9 have no branch protection at all, and all 10 have Renovate automerge enabled.** `gh api repos/SecurityRonin/<repo>/branches/main/protection` returns `404 Branch not protected` for `timeglyph`, `safe-read`, `issen`, `ntfs-forensic`, `ewf-forensic`, `browser-forensic`, `srum-forensic`, `blazehash` and `disk-forensic`. Only `forensicnomicon` has any required check, and it has exactly one.
+
+ADR-0018 is explicit that automerge is gated on the *promise*, not the repo role: a repo that publishes a library declares a low `rust-version` that downstreams pin against, so it **“automerges only with a required, blocking low-MSRV check,”** and that “enforcement is a CI job, never a reviewer noticing.” With no branch protection, there are no required checks — so the enforcement mechanism the ADR names does not exist, and `lockFileMaintenance` merges dependency updates into `main` unreviewed and ungated.
+
+**This reframes most of the rest of this report.** Every gate discussed here — the reusable CI workflow, the unified `deny.toml`, the coverage semantics, the `workspace.lints` sweep, the MSRV jobs — is *advisory* until something requires it. A green check that blocks nothing is a notification. The consolidation work is still worth doing, but its value is unrealized without the protection layer, and that layer is repo-admin configuration rather than code.
+
+Two consequences worth separating: fixing this is cheap (branch protection with a blocking set: fmt · clippy · test · MSRV · deny · vet), and it is **outward-facing repo administration** affecting every check on every repo, so it belongs to the fleet owner rather than to any change in this audit.
+
+### 1.4 Two live unsoundness advisories are invisible to the gate meant to catch them
 
 Consolidating the 91 `deny.toml` files surfaced a cargo-deny behaviour that silently disarms part of the advisory gate.
 
@@ -107,7 +117,7 @@ Both repos pass their current gate. Both believe the advisory is dead. **Both st
 
 Fixes are ordinary caret widenings — `lru = "0.16"` (≥0.16.3 patched) and `fuser = "0.16"` — and both advisories begin firing under the unified config, which is how they were found.
 
-### 1.4 Timestamp defects
+### 1.5 Timestamp defects
 
 **DEFECT — wrong-direction saturation.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36`
 
@@ -141,7 +151,7 @@ The finding survives as hardening rather than a live bug: `ExecutionRecord`'s fi
 
 Consumer check, which shaped the remedy: `filetime_to_datetime` has **zero call sites fleet-wide** — dead public API — and `ole_date_to_datetime` has 6, all inside `srum-parser` in the same workspace. So the breaking change is contained to one repo.
 
-### 1.5 Panic-capable and OOB readers
+### 1.6 Panic-capable and OOB readers
 
 | Site | Problem | Live caller today? |
 |---|---|---|
@@ -155,14 +165,14 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 
 **Characterize the forensicnomicon one precisely.** It is an **API-contract defect in a published crate**, not an evidence-driven one: “safe-Rust panic on public API misuse,” not “malicious image crashes the parser.” The distinction matters because ADR-0012's threat model is attacker-controlled *images*, and this guard is not on that path. It is still worth fixing — a guard wrong on its own terms, in the FOUNDATION crate every analyzer depends on — but the severity should not be inflated to match the other two.
 
-### 1.6 Silent test gates
+### 1.7 Silent test gates
 
 **79 of 206 env-gated test sites (38%) skip silently** — an `Option`-returning helper plus a bare early return, with no notice printed. A gate that never fires is indistinguishable from a gate that passed. Concentrations: `SQLITE3_BIN` is 2 loud / 11 silent; `SZECHUAN_DC_MEM` is 0 loud / 7 silent; `AZURE_STORAGE_ACCOUNT` is 0 / 6.
 
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
-### 1.7 Mandate gaps
+### 1.8 Mandate gaps
 
 | Mandate | Compliant | Gap |
 |---|---|---|
