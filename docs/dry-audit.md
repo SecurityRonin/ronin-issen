@@ -566,4 +566,10 @@ The first draft *did* apply this check to the issen saturation defect (“no non
 
 Every finding in this report now carries a reachability answer or an explicit “not assessed.”
 
+**A second failure mode, and a cheap heuristic that catches it.** Three counts in this audit were wrong because a file count was reported as a repo count (`grep -rl` lists files; 91 repos hold roughly 350 workflow files between them). A fourth — a claim that **0 of 91** repos set a `permissions:` block — came from a regex written `^\s*permissions:` without `re.MULTILINE`, so `^` anchored to the start of the file and matched nothing.
+
+The heuristic that would have caught the last one, and is worth applying generally: **an extreme value is exactly where you check twice.** A universal negative about 91 independently-maintained repositories should read as implausible on its face. “Zero of ninety-one” is a claim about a *population*, and populations that size rarely agree on anything — so the number is more likely to be measuring the instrument than the fleet.
+
+Corollaries used throughout the later passes: any figure sourced from `grep -rl` needs `cut -d/ -f1,2 | sort -u` before it can be called a repo count; and a count that has not been reproduced by a second, differently-shaped method should be reported with that caveat attached.
+
 Counts throughout are from Python `os.walk` scans excluding `target/`, `.git/`, `.claude/`, `node_modules/`, and vendored third-party trees, with duplicate bodies opened and read rather than inferred from grep, and file clustering by content hash both raw and name-normalized.
