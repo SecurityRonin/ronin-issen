@@ -160,23 +160,42 @@ Ranked by consequence, not by copy count.
 | `wrapping_add` | shellitem `reader.rs:21`, winreg-core `bytes.rs:12` |
 | `checked_add` (matches `safe-read`) | userassist `lib.rs:212`, sqlite `carve.rs:53`, hfsplus `decmpfs.rs:320` |
 
-**What `safe-read` must gain before the sweep** (roughly 150–250 lines plus fuzz targets):
+**`safe-read` is a legitimate home for this — the layering objection that disqualified `timeglyph` does not apply.** ADR-0016 (line 115) names it among the “generic utility leaves” at the bottom of the hierarchy, and the manifest bears that out: **zero dependencies**, `unsafe_code = "forbid"`, `no_std`, and `rust-version = "1.75"` chosen deliberately so “every fleet reader can depend on it without raising theirs.” Anything added must stay inside that 1.75 floor and must not pull a dependency.
+
+**What `safe-read` should gain:**
 
 ```rust
 // (a) signed readers — needed by winevt cursor.rs:122-152, forensicnomicon decode.rs:102/115,
-//     lnk lib.rs:208, snss lib.rs:293, segb common.rs:77
+//     lnk lib.rs:208, snss lib.rs:293, segb common.rs:77.
+//     Unambiguous: same macro shape, no policy decision.
 pub fn le_i16(data: &[u8], off: usize) -> i16;   // + be_/i32/i64 + try_ twins
 
 // (b) array window — ntfs `arr`, vsc read_guid (bytes.rs:36), vhdx guid_at (integrity.rs:67)
-//     each re-derive this
+//     each re-derive this. The bounded_reader! macro ALREADY does it internally;
+//     this only surfaces an existing primitive.
 pub fn try_bytes<const N: usize>(data: &[u8], off: usize) -> Option<[u8; N]>;
-
-// (c) varint — the layer law bars PARSER->PARSER, so protobuf-forensic-core cannot be the
-//     home; FOUNDATION-layer safe-read can
-pub fn leb128_u64(data: &[u8], off: usize) -> Option<(u64, usize)>;
 ```
 
-Optionally an alloc-gated UTF-16 pair and a `Cursor<'a>` (see 2.3, 2.5).
+**What `safe-read` should NOT gain — two proposals from an earlier draft of this report, withdrawn:**
+
+**LEB128 varint.** Withdrawn. Four reasons, none of which were checked before proposing it:
+
+1. It is a *format*, not a bounded read. `safe-read`'s contract is “N bytes at a fixed offset, bounds-checked, benign default.” A variable-length encoding with its own validity rules is a different kind of thing.
+2. **`safe-read` structurally cannot express the forensically interesting answer.** It returns `0`/`None`; `protobuf-core` returns typed errors carrying offsets (`TruncatedVarint`, `OverlongVarint`, `VarintOverflow`). An overlong varint is an evasion signal worth *reporting*, and flattening it to `None` destroys that signal. Centralizing would degrade the best implementation to the level of the weakest.
+3. **They may not be the same format.** `chromium-storage/util.rs:6` documents itself as decoding IndexedDB's `EncodeVarInt` — Chromium's own encoding, not the protobuf wire varint. The earlier draft asserted an equivalence it had not verified.
+4. **Signatures are incompatible.** `protobuf-core` is a `&mut self` cursor method; `segb` takes `pos: &mut usize`; only `chromium` uses the pure-offset shape.
+
+The underlying finding stands (2.5): the implementations disagree on the tenth byte — `protobuf-core` rejects a payload above `0x01`, while `segb` and `chromium-storage` silently drop the high bits. The remedy is a documented fleet rule with `protobuf-core` as the reference, not a shared function in a crate that cannot say *why* it rejected.
+
+**UTF-16 decoding.** Withdrawn from `safe-read`:
+
+1. `safe-read` is `no_std` with **zero dependencies and no features**; UTF-16 → `String` requires alloc, so this means a feature flag on a deliberately minimal leaf.
+2. **The four NUL policies (2.3) are different operations, not variants of one.** A NUL-terminated registry value and a length-prefixed NTFS filename are genuinely different reads; one function serving both needs a policy parameter, at which point sharing buys little.
+3. **The best implementation is richer than `-> String`.** `leveldb-forensic/value.rs:53` tracks a `lossy` flag and dangling surrogate halves — precisely the “return types carry security-relevant state” rule. Collapsing to `String` would discard it.
+
+If UTF-16 is centralized at all it belongs in **`forensicnomicon`** — already allocating, already FOUNDATION, already the home of format facts — as several explicitly-named functions rather than one.
+
+GUID handling splits correctly across the two: byte *extraction* via `try_bytes::<16>` above, string *formatting* via the `uuid` crate (2.4), not `safe-read`.
 
 ### 2.2 FILETIME and epoch conversion — 22 converters, 7 zero-semantics
 
@@ -405,7 +424,7 @@ No action on `snapshot-forensic` — see 1.1; its README is already future-tense
 
 9. **One org reusable CI workflow** (`SecurityRonin/.github`), callers reduced to ~10-line stubs. Verified viable: cross-repo `workflow_call` works for public repos, `secrets: inherit` passes org secrets, and the called workflow should be pinned to a full SHA. This single change collapses 89 `ci.yml` variants to 1 and simultaneously closes the 48-repo secret-scan hole, the 81-repo floating-pin problem, the 69-repo missing-`permissions` problem, and — by running `cargo deny --config <shared>` — the 43-variant `deny.toml` problem.
 10. **`forensicnomicon::temporal`** gains the three sentinel-policy functions (2.2); migrate the 22 converters.
-11. **`safe-read` 0.3** gains signed readers, `try_bytes::<N>`, and `leb128_u64` (2.1); then sweep the 42 non-adopting repos.
+11. **`safe-read` 0.3** gains signed readers and `try_bytes::<N>` only (2.1) — staying `no_std`, dependency-free, and inside the 1.75 floor; then sweep the 42 non-adopting repos. Explicitly **not** LEB128 or UTF-16: see 2.1 for why both were withdrawn.
 
 **Mechanical sweeps, once the above land:**
 
