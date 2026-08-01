@@ -16,7 +16,7 @@ Three findings outrank everything else and are not really DRY findings at all:
 
 1. **A fabricated guarantee.** `parser/shellitem/README.md:60` states the crate is “fuzzed over `parse_idlist`.” No fuzz target exists, and `git log --all -- fuzz` confirms one never has. `shellitem` parses untrusted `ITEMIDLIST` structures. This is a published claim that the repository's own history contradicts.
 
-2. **Two live timestamp defects.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36` saturates *negative* overflow to `i64::MAX`, so a zero FILETIME sorts at the far end of a super-timeline instead of being absent. `parser/prefetch-forensic/forensic/src/bin/prefetch4n6.rs:68` has no zero guard and renders an unset timestamp as a real date, `1601-01-01T00:00:00Z`.
+2. **Two timestamp converters with wrong edge behavior — both latent, neither reachable today.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36` saturates *negative* overflow to `i64::MAX`, so a zero FILETIME would sort at the far end of a super-timeline instead of reading as absent; it has no non-test callers. `parser/prefetch-forensic/forensic/src/bin/prefetch4n6.rs:68` has no zero guard and returns `Some("1601-01-01T00:00:00Z")` for an unset value; `prefetch-core` filters non-positive FILETIMEs upstream (`core/src/lib.rs:159`), so the binary's `-` fallback already fires correctly. Both are wrong functions guarded by circumstance, not by their own contract.
 
 3. **A panic-capable reader in a Paranoid-Gatekeeper crate.** `container/vmdk-forensic/core/src/bytes.rs:6` panics on any input shorter than four bytes, in a crate whose stated contract is that malformed images never panic. It has **no live caller today** (see 1.3), so this is a latent hazard rather than an active bug — but it sits in published API of a crate that forbids exactly this.
 
@@ -73,9 +73,13 @@ The fallback is `i64::try_from(unix_100ns * 100).unwrap_or(i64::MAX)`. FILETIME 
 
 Mitigating: no non-test callers of this `pub fn` exist today, so the impact is latent — but it is published API of the crate.
 
-**DEFECT — unset renders as a real date.** `parser/prefetch-forensic/forensic/src/bin/prefetch4n6.rs:68`
+**LATENT — unset value has a rendering it should not.** `parser/prefetch-forensic/forensic/src/bin/prefetch4n6.rs:68`
 
-`filetime_to_iso` has no zero guard, and the call site (`.first().and_then(|&ft| filetime_to_iso(ft))`) therefore prints `1601-01-01T00:00:00Z` for an unset first run-slot instead of an absence marker. Sibling tools in the same fleet render `-` for exactly this input.
+`filetime_to_iso` has no zero guard and returns `Some("1601-01-01T00:00:00Z")` for input `0` — confirmed by a failing test written against it. Sibling tools in the same fleet render `-` for exactly this input.
+
+**Correction to an earlier draft of this report.** That draft asserted the call site “therefore prints `1601-01-01T00:00:00Z` for an unset first run-slot.” **It does not.** `prefetch-core` filters non-positive FILETIMEs upstream at `core/src/lib.rs:159` (`Some(t) if t > 0 => last_run_times.push(t), _ => break`), so `last_run_filetimes` never carries a zero for a record parsed by this workspace, `.first()` returns `None`, and the `-` fallback already engages. This was verified empirically, not by reading: a synthetic SCCA v30 with all eight last-run FILETIMEs zeroed, run through `prefetch_core::parse_decompressed`, yields an empty vector.
+
+The finding survives as hardening rather than a live bug: `ExecutionRecord`'s fields are public, so a consumer can construct one holding a zero, and the conversion should be correct on its own terms rather than resting on an upstream invariant its call site never states.
 
 **Fail-loud violation.** `parser/srum-forensic/crates/srum-core/src/lib.rs:55`
 
@@ -366,7 +370,7 @@ Two prior claims **survived** verification: the `bytes.rs`-versus-`safe-read` fi
 **Immediate — small local edits, no coordination:**
 
 1. `issen-correlation/src/temporal_checks.rs:36` — saturate negatives to `i64::MIN`, or return `Option`.
-2. `prefetch4n6.rs:68` — add the zero guard.
+2. `prefetch4n6.rs:68` — add the zero guard. Hardening, not a hotfix: upstream filtering makes the bad path unreachable today (see 1.2).
 3. `srum-core/src/lib.rs:55,65` — return `Option<Timestamp>` instead of clamping to `UNIX_EPOCH`.
 4. `vmdk-forensic/core/src/bytes.rs:6` — replace the `b[..4]` slice index with a bounds-checked read (and drop the unreachable `.expect()`). No live caller, so this is hygiene, not a hotfix.
 5. `forensicnomicon/crates/core/src/catalog/decode.rs:85-99` — use `checked_add` in the guard.
@@ -407,5 +411,17 @@ Two methodology failures were caught and corrected mid-audit; both would have pr
 - `rg "impl Observation"` finds 46 of 54 impls; the other 17 use the fully-qualified path. (The arithmetic here is not an error: 46 + 17 = 63 includes overlap between naive and qualified matches within the same files; the deduplicated total is 54.)
 
 Reported false-positive rates: the raw `extension()` grep was ~97% false-positive for container dispatch (131 hits → 1 genuine production site); the magic-literal grep ~77%; the integer-reader grep ~7%. Only filtered counts appear above.
+
+**A systematic failure mode in the first draft, worth naming so it is not repeated.** Three findings asserted a *consequence* that follow-up verification could not reproduce, and all three failed the same way: the function was read correctly, and the call graph was not checked.
+
+| Claim | What was missing |
+|---|---|
+| Divergent GUID formatting “breaks string-equality joins in issen's correlation layer” (2.4) | No such join exists — `issen-correlation/` contains no GUID reference at all |
+| `prefetch4n6` “prints `1601-01-01…` for an unset run-slot” (1.2) | `prefetch-core` filters non-positive FILETIMEs upstream, so the path is unreachable |
+| `vmdk-forensic`'s reader “panics on any input shorter than 4 bytes” (1.3) | True of the function; `chunks_exact(4)` means no caller can supply short input |
+
+The first draft *did* apply this check to the issen saturation defect (“no non-test callers… but it is published API”) and then failed to apply it to the next three findings, while stating them with equal or greater confidence. Reading a function body proves what the function does; it does not prove anything reaches it. Both questions have to be asked, and the answer to the second belongs in the finding — a wrong function guarded by circumstance is still worth fixing, but it is not an active bug and should not be sold as one.
+
+Every finding in this report now carries a reachability answer or an explicit “not assessed.”
 
 Counts throughout are from Python `os.walk` scans excluding `target/`, `.git/`, `.claude/`, `node_modules/`, and vendored third-party trees, with duplicate bodies opened and read rather than inferred from grep, and file clustering by content hash both raw and name-normalized.
