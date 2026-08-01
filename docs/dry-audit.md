@@ -102,10 +102,12 @@ Consumer check, which shaped the remedy: `filetime_to_datetime` has **zero call 
 | Site | Problem | Live caller today? |
 |---|---|---|
 | `container/vmdk-forensic/core/src/bytes.rs:6` | `u32::from_le_bytes(b[..4].try_into().expect("4 bytes"))`. The panic fires at the **`b[..4]` slice index** (“range end index 4 out of range for slice of length N”) for any `b.len() < 4`. The `.try_into().expect("4 bytes")` that follows is **unreachable dead code** — once the slice succeeds it is exactly 4 bytes, so the conversion cannot fail | **No.** `le_u32` is called only from `le_u32_table` via `b.chunks_exact(4).map(le_u32)`, and `chunks_exact(4)` yields only exact-length chunks. Latent, but published API |
-| `knowledge/forensicnomicon/crates/core/src/catalog/decode.rs:85-99` | Guard `if offset + 8 > data.len()` wraps for `offset` near `usize::MAX`, after which `data[offset]` indexes out of bounds. In debug builds the `offset + 8` addition itself panics first on overflow — an easier trigger, not a mitigation | Not assessed |
+| `knowledge/forensicnomicon/crates/core/src/catalog/decode.rs` — **7 instances**, not 1: `read_u16_le`, `read_u32_le`, `read_u64_le`, `read_i32_le`, `read_i64_le`, `decode_binary_field`, `Decoder::FiletimeAt` | Guard `if offset + N > data.len()` wraps for `offset` near `usize::MAX`. **Both modes demonstrated by test:** release — guard wraps, passes, then `index out of bounds: the len is 8 but the index is 18446744073709551614`; debug — the addition itself panics first with `attempt to add with overflow` | **Not attacker-reachable.** Every catalog offset is a compile-time literal in range 0..60; `Decoder`/`BinaryField`/`ArtifactDescriptor` derive `Serialize` only, never `Deserialize`, so no evidence file can become a descriptor at runtime. **But** `ForensicCatalog::decode` is public and `#[non_exhaustive]` restricts matching, not construction — so a downstream crate can write `Decoder::FiletimeAt { offset: usize::MAX }` and panic a published FOUNDATION API through entirely safe code |
 | `acquisition/livedisk-forensic/src/drive_layout.rs:99` | GUID formatter indexes `b[8]`–`b[15]` directly on a `&[u8]` without a length check | Not assessed |
 
 All three crates sit under the Paranoid-Gatekeeper standard, which forbids exactly this — reachability affects urgency, not whether the code should exist.
+
+**Characterize the forensicnomicon one precisely.** It is an **API-contract defect in a published crate**, not an evidence-driven one: “safe-Rust panic on public API misuse,” not “malicious image crashes the parser.” The distinction matters because ADR-0012's threat model is attacker-controlled *images*, and this guard is not on that path. It is still worth fixing — a guard wrong on its own terms, in the FOUNDATION crate every analyzer depends on — but the severity should not be inflated to match the other two.
 
 ### 1.4 Silent test gates
 
@@ -196,6 +198,10 @@ The underlying finding stands (2.5): the implementations disagree on the tenth b
 If UTF-16 is centralized at all it belongs in **`forensicnomicon`** — already allocating, already FOUNDATION, already the home of format facts — as several explicitly-named functions rather than one.
 
 GUID handling splits correctly across the two: byte *extraction* via `try_bytes::<16>` above, string *formatting* via the `uuid` crate (2.4), not `safe-read`.
+
+**An unresolved tension the sweep-everything-onto-`safe-read` framing hides.** ADR-0012 says *every* integer read routes through `safe-read`. But `forensicnomicon` is the zero-dependency FOUNDATION leaf, and `safe-read` is a utility leaf — a sibling at the bottom, not something beneath it. Pulling a dependency into FOUNDATION to express a three-line bounds predicate arguably inverts the layering for no gain, which is exactly the call made when fixing the guard above (the fix used a local private `fits` helper, not `safe-read`).
+
+So the “42 repos should adopt `safe-read`” sweep needs one carve-out decided deliberately rather than by default: **does FOUNDATION itself adopt it, or is `forensicnomicon` a documented exception?** Both answers are defensible; leaving it implicit is what produces a hand-rolled reader in the crate that defines the standard.
 
 ### 2.2 FILETIME and epoch conversion — 22 converters, 7 zero-semantics
 
