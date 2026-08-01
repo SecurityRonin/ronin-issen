@@ -219,6 +219,28 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
+### 1.9 Oracle differentials that have never run in CI — and the fix was already written
+
+**Three repos hardcode the macOS-ARM Homebrew path for their oracle binary:**
+
+```rust
+const QEMU_IMG: &str = "/opt/homebrew/bin/qemu-img";
+```
+
+`vhd-forensic/core/tests/qemu_differential.rs` (lines 19 **and** 99) and `qcow2-forensic/forensic/tests/real_images.rs:12`. That path does not exist on the Linux CI runner, so **every qemu differential in those crates has silently skipped on every CI run** — they have never validated anything in CI. `vhdx-forensic`'s own doc comment concedes it: *“these tests skip automatically if qemu-img is not installed, so they run in CI only on machines with QEMU available (the dev machine).”*
+
+**The correction already exists, and did not propagate one directory.** `qcow2-forensic/**core**/tests/real_images.rs:13` defines `qemu_img_path()` searching `/opt/homebrew`, `/usr/local` and `/usr/bin`, above a comment that states the problem exactly:
+
+> *“The old hardcoded Homebrew path made the oracle tests skip on the Linux CI runner, dropping coverage.”*
+
+Someone diagnosed this, fixed it, and wrote down why — and the sibling crate **in the same repository** still carries the bug. `vmdk-forensic/core` also has the fixed form. This is the audit's thesis in miniature: the duplication is not the cost, the **failure of a correction to reach its copies** is.
+
+**A shared variable name arms tests the operator did not mean to run.** `CORPUS_DIR` is used verbatim by four repos — `qcow2-forensic`, `vhd-forensic`, `vhdx-forensic`, `vmdk-forensic`. Exporting it to run one silently arms the other three against a corpus that is not theirs.
+
+**Correction to 1.8: the “loud” gates are not loud either.** That section's 127-loud / 79-silent split is wrong in the direction of comfort. `cargo test` **captures stderr and replays it only for failing tests**, so an `eprintln!` skip notice in a passing test is never shown under a default `cargo test` run. A notice alone does not solve the problem it was written for; only escalating a skip to a **failure** does — which is why the replacement gate crate carries a strict mode that turns every skip into a hard failure, and why that mode is the only way to answer “has this gate ever been able to fire?”
+
+**Six gate variables are silent *and* undocumented** — nothing committed could ever have set them, so the tests behind them may never have run once: `ISSEN_LOGFILE_FIXTURE`, `NTFS_FORENSIC_E01`, `NTFS_FORENSIC_PATH`, `NTFS_FORENSIC_REF`, `BF_BLOCKFILE_CACHE_DIR`, `BR4N6_E01_URL`, `FORENSICNOMICON_MFT_RAW`. (Evidence limit: this shows nothing *committed* sets them; a developer could still export one ad hoc.)
+
 ### 1.9 Mandate gaps
 
 | Mandate | Compliant | Gap |
