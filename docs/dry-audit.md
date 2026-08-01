@@ -90,7 +90,24 @@ It is recorded in Part 1 rather than among the DRY findings because it is not du
 
 Structural remedy, beyond correcting the text: the legal-doc generator derives the licence from `Cargo.toml`/`LICENSE` and **the template cannot override it**, so a rendered document is incapable of disagreeing with the shipped licence. That is the secure-by-design form of the fix — the wrong state becomes unrepresentable rather than merely corrected once.
 
-### 1.3 Timestamp defects
+### 1.3 Two live unsoundness advisories are invisible to the gate meant to catch them
+
+Consolidating the 91 `deny.toml` files surfaced a cargo-deny behaviour that silently disarms part of the advisory gate.
+
+**Observed, by four-way bisect on one repo against one advisory DB:** in cargo-deny 0.19.0, advisories carrying `informational = "unsound"` are *evaluated* when `unmaintained` is set to `"workspace"` or `"transitive"`, and **silently skipped** under the unset default and under the explicit `"all"` and `"none"` values. (`none` → ok, `workspace` → FAILED, `transitive` → FAILED, `all` → ok.) This is reported as observed behaviour; the cause was not traced to cargo-deny's source.
+
+Consequence, verified against the working tree:
+
+| Repo | Crate present | Advisory | Gate state |
+|---|---|---|---|
+| `container/ewf-forensic` | `lru 0.12.5` | `RUSTSEC-2026-0002` — `IterMut` violates Stacked Borrows | Listed in its own `ignore`, with a comment asserting it was “genuinely fixed”. `unmaintained` unset |
+| `filesystem/4n6mount` | `fuser 0.15.1` | `RUSTSEC-2021-0154` — uninitialised memory read + leak | Listed in its own `ignore`. `unmaintained` unset |
+
+Both repos pass their current gate. Both believe the advisory is dead. **Both still carry the affected crate version.** Two memory-safety unsoundness advisories, in a fleet whose crates parse attacker-controlled evidence images, are currently not surfaced by the mechanism that exists to surface them.
+
+Fixes are ordinary caret widenings — `lru = "0.16"` (≥0.16.3 patched) and `fuser = "0.16"` — and both advisories begin firing under the unified config, which is how they were found.
+
+### 1.4 Timestamp defects
 
 **DEFECT — wrong-direction saturation.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36`
 
@@ -124,7 +141,7 @@ The finding survives as hardening rather than a live bug: `ExecutionRecord`'s fi
 
 Consumer check, which shaped the remedy: `filetime_to_datetime` has **zero call sites fleet-wide** — dead public API — and `ole_date_to_datetime` has 6, all inside `srum-parser` in the same workspace. So the breaking change is contained to one repo.
 
-### 1.4 Panic-capable and OOB readers
+### 1.5 Panic-capable and OOB readers
 
 | Site | Problem | Live caller today? |
 |---|---|---|
@@ -138,14 +155,14 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 
 **Characterize the forensicnomicon one precisely.** It is an **API-contract defect in a published crate**, not an evidence-driven one: “safe-Rust panic on public API misuse,” not “malicious image crashes the parser.” The distinction matters because ADR-0012's threat model is attacker-controlled *images*, and this guard is not on that path. It is still worth fixing — a guard wrong on its own terms, in the FOUNDATION crate every analyzer depends on — but the severity should not be inflated to match the other two.
 
-### 1.5 Silent test gates
+### 1.6 Silent test gates
 
 **79 of 206 env-gated test sites (38%) skip silently** — an `Option`-returning helper plus a bare early return, with no notice printed. A gate that never fires is indistinguishable from a gate that passed. Concentrations: `SQLITE3_BIN` is 2 loud / 11 silent; `SZECHUAN_DC_MEM` is 0 loud / 7 silent; `AZURE_STORAGE_ACCOUNT` is 0 / 6.
 
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
-### 1.6 Mandate gaps
+### 1.7 Mandate gaps
 
 | Mandate | Compliant | Gap |
 |---|---|---|
