@@ -67,7 +67,13 @@ ADR-0012 requires a fuzz target for untrusted-input parsers regardless, so the r
 
 **DEFECT — wrong-direction saturation.** `orchestration/issen/crates/issen-correlation/src/temporal_checks.rs:36`
 
-The fallback is `i64::try_from(unix_100ns * 100).unwrap_or(i64::MAX)`. FILETIME `0` — and any value before roughly 1677, the lower bound of i64-nanosecond range — overflows *negatively* and returns `i64::MAX`, a year-2262 instant. In a sorted super-timeline that would place an absent timestamp at the very end. The epoch offset alone (`-11,644,473,600,000,000,000` ns) is already below `i64::MIN`, so input `0` necessarily reaches this fallback regardless of which code path computes it.
+The fallback is `i64::try_from(unix_100ns * 100).unwrap_or(i64::MAX)`. FILETIME `0` — and any value before roughly 1677, the lower bound of i64-nanosecond range — overflows *negatively* and returns `i64::MAX`, a year-2262 instant. In a sorted super-timeline that would place an absent timestamp at the very end.
+
+**Confirmed by test, not by reading.** `assert_eq!(filetime_to_unix_ns(0), i64::MIN)` fails with `left: 9223372036854775807`. This is the one finding in Part 1 that has been demonstrated rather than inferred.
+
+**Control-flow correction.** The function is not a bare `try_from(...).unwrap_or(i64::MAX)`. A `timeglyph::format("filetime")` decode path sits in front, and the buggy expression lives in a fallback closure reached only when timeglyph cannot represent the value — so the path to the defect runs *through* timeglyph rather than directly. The outcome is unchanged, but anyone reasoning from the quoted line alone will miss a hop.
+
+**Blast radius is this one site.** The other two converters in the same workspace are correct: `issen-parser-evtx/src/lib.rs:448` clamps both directions via `.clamp(i128::from(i64::MIN), i128::from(i64::MAX))`, and `issen-parser-usnjrnl/src/lib.rs:166` is correct by construction using `saturating_sub`/`saturating_mul`.
 
 **Corroboration that this is a bug and not a taste question:** `browser-forensic-core/src/timestamp.rs:53` hits the identical negative-overflow scenario and saturates to `i64::MIN` — the correct direction. Two fleet crates, same arithmetic, opposite saturation.
 
@@ -84,6 +90,12 @@ The finding survives as hardening rather than a live bug: `ExecutionRecord`'s fi
 **Fail-loud violation.** `parser/srum-forensic/crates/srum-core/src/lib.rs:55`
 
 `filetime_to_datetime` is total and uses `saturating_sub` plus `unwrap_or(UNIX_EPOCH)`, so any pre-epoch or garbage FILETIME becomes exactly `1970-01-01T00:00:00Z` — a valid-looking `Timestamp` with no absence signal. The same pattern appears in `ole_date_to_datetime` (`srum-core/src/lib.rs:65`) for non-finite input. A timestomped SRUM row silently becomes a 1970 timeline entry.
+
+**srum-core is the outlier, not the pioneer.** `winreg_core::key::filetime_to_datetime` already returns `Option<jiff::Timestamp>` with exactly the zero/pre-epoch guard this section recommends. The correct signature was next door the whole time — which is itself the argument against adding a second, parallel converter to preserve the wrong one.
+
+**The fix only reaches half the problem, and the other half is one layer up.** `crates/srum-parser/src/lib.rs:51` — `collect_table` calls `decode(&data, page, tag).ok()`, discarding **every** decode error, including the pre-existing truncation errors. Making the converters fallible removes the *fabrication* (no false 1970 entry reaches the timeline) but the record is then silently **dropped** rather than loudly reported. Eliminating fabricated evidence is a strict improvement over a false timestamp; it is not fail-loud. Restoring the loud half changes `parse_*` public semantics (hard error versus a warnings channel) and needs its own scoped decision.
+
+Consumer check, which shaped the remedy: `filetime_to_datetime` has **zero call sites fleet-wide** — dead public API — and `ole_date_to_datetime` has 6, all inside `srum-parser` in the same workspace. So the breaking change is contained to one repo.
 
 ### 1.3 Panic-capable and OOB readers
 
@@ -112,6 +124,14 @@ Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-
 | Fully SHA-pinned actions | **10/91** | 81 repos carry at least one floating tag, most often `dtolnay/rust-toolchain@stable` |
 | `docs/validation.md` | 70/91 | 21 missing (a stated pre-push gate) |
 | `docs/PRD.md` | 81/91 | 10 missing (a stated pre-push gate) |
+
+**Two further violations surfaced while implementing fixes, not by the sweeps** — both are the kind a file-shaped audit structurally cannot see:
+
+- **`crates/srum-gui` is a Tauri app.** ADR-0014 bans Tauri, `dioxus-desktop`, and any `wry`/webview bundle outright, because crates.io cannot deliver them; the fleet GUI standard is `egui`/`eframe`. A documented exception requires `publish = false` and a stated reason.
+- **`useract-forensic` pins `srum-core = "0.1"`** while 0.2.0 is published — the layer-1 stale-caret pattern (requirement too narrow for `cargo update` to cross). It cannot reach 0.2, let alone the 0.3 the fail-loud fix requires. This is the same failure class as `blazehash`'s `ewf = "0.2"` against the fleet's 0.4 (2.8), suggesting a fleet-wide caret-width audit is worth its own pass.
+- **`issen`'s committed `Cargo.lock` records `forensicnomicon-core` 1.4.0** while the sibling working tree is at 1.5.0 — layer-2 drift (lock behind requirement). Surfaced incidentally when a build regenerated the lock; reverted rather than committed, since it is unrelated to the change that found it.
+
+**A tooling landmine worth recording, because it will recur.** issen's manifests use relative `path` deps into sibling repos (`../../parser/...`). Working from `.claude/worktrees/<name>/` breaks them — cargo fails with `failed to load manifest for workspace member`. This is the same sibling-repo `path`-dep hazard the constitution already documents for release tooling (release-plz, `cargo package`), and it bites `git worktree` for the identical reason: the sibling is no longer next door. CI is unaffected, since it uses the normal layout.
 
 ---
 
