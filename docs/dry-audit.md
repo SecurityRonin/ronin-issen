@@ -325,6 +325,18 @@ let guarded = match cleaned.chars().next() {
 | `\r=1+1` | **no** — `next()` is `\r` | yes (`needs_csv_quoting` matches `\r`) | quoted but unguarded |
 | `" =1+1"` (leading space) | **no** | **no** — space is neither stripped nor quote-triggering | **emitted completely bare** |
 
+**The precise rule, refined by probing rather than reading — and it is not "any lead-in defeats the guard".** A leading **tab** is *safe*: `is_display_unsafe` strips it **before** the character-0 check, so `=` lands at position 0 and does get the apostrophe. What defeats the guard is **a lead-in that survives the control-character filter** — that is, whitespace which is not a control character:
+
+| Input | Emitted | Verdict |
+|---|---|---|
+| `=cmd` | `'=cmd` | guarded |
+| tab + `=cmd` | `'=cmd` | **guarded** — tab stripped first |
+| CR or LF + `=cmd` | quoted, apostrophe absent | quoted, **not** guarded |
+| space + `=cmd` | unchanged | **bare — neither** |
+| U+00A0 (NBSP) + `=cmd` | unchanged | **bare — neither** |
+
+**This has a consequence for the fix, not just the finding.** The remedy proposed upstream keys the guard on the first character not in `{space, tab, CR, LF}` — which **misses U+00A0** and any other non-ASCII whitespace. A correct guard needs a Unicode whitespace predicate, not a four-character set. Worth checking before jsonguard PR #5 is treated as closing this.
+
 So the leading-space case is *worse* than the CR case, and neither is CR-specific. **Quoting is not formula-guarding** — an earlier draft treated the two as interchangeable, and a follow-up agent correctly showed CR-prefixed input is quoted while incorrectly concluding the guard was therefore closed. The general fix keys the guard on the first character not in `{space, tab, CR, LF}`.
 
 **A second defect in the same function, and for a forensic tool it is the more serious one.** Line 92 filters through `is_display_unsafe`, which strips `U+0000..=U+001F`, `U+007F`, `U+0080..=U+009F` and bidi controls — while `Guarded.lossy` is set **only** by invalid UTF-8, never by this stripping. So:
