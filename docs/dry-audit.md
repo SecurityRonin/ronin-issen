@@ -346,6 +346,14 @@ let guarded = match cleaned.chars().next() {
 | space + `=cmd` | unchanged | **bare — neither** |
 | U+00A0 (NBSP) + `=cmd` | unchanged | **bare — neither** |
 
+**Verified against the actual proposed fix, and the gap was wider than predicted.** PR #5 keys the guard on the first character not in `{space, tab, CR, LF}` — the incomplete ASCII set anticipated above. But `char::is_whitespace`, the obvious remedy, is *also* insufficient. It does match U+00A0 (confirmed by execution, along with U+1680, U+2000–U+200A, U+2028, U+2029, U+202F, U+205F, U+3000) — yet it returns **false** for an entire family of invisible characters that all survive the control-character filter and reach the guard:
+
+**U+200B** ZERO WIDTH SPACE · **U+200C** ZWNJ · **U+200D** ZWJ · **U+2060** WORD JOINER · **U+FEFF** BOM · **U+180E** MONGOLIAN VOWEL SEPARATOR · **U+00AD** SOFT HYPHEN
+
+Their shared property is General_Category **`Cf`**, so the correct predicate is `c.is_whitespace() || is_format_char(c)` over the whole `Cf` category — enumerated from the UCD `DerivedGeneralCategory.txt` rather than by listing the seven observed instances. That is the general rule the failing cases are instances of.
+
+**A vacuous-test trap in the fix itself, worth recording as a pattern.** PR #5's own test helper `first_significant` carries the *same* ASCII set as the code under test. A U+00A0 test written through that helper **passes vacuously** — `find` returns `Some(U+00A0)`, which `assert_ne!(.., Some('='))` happily accepts. A test that reuses the implementation's own predicate cannot detect a defect in that predicate. The tests must assert on the **emitted output**, not on the helper.
+
 **This has a consequence for the fix, not just the finding.** The remedy proposed upstream keys the guard on the first character not in `{space, tab, CR, LF}` — which **misses U+00A0** and any other non-ASCII whitespace. A correct guard needs a Unicode whitespace predicate, not a four-character set. Worth checking before jsonguard PR #5 is treated as closing this.
 
 So the leading-space case is *worse* than the CR case, and neither is CR-specific. **Quoting is not formula-guarding** — an earlier draft treated the two as interchangeable, and a follow-up agent correctly showed CR-prefixed input is quoted while incorrectly concluding the guard was therefore closed. The general fix keys the guard on the first character not in `{space, tab, CR, LF}`.
