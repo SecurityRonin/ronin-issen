@@ -256,6 +256,16 @@ Status codes: **G** green · **R** red · **N** no CI dispatched.
 
 ---
 
+## Status corrections — 2026-08-02, later
+
+Three items previously listed as blocked are resolved.
+
+**`safe-decode 0.1.0` and `forensic-testgate 0.1.0` are PUBLISHED on crates.io.** An earlier draft said they awaited release-PR approval. That was wrong: **release-plz publishes a crate's *first* version directly**, because there is no prior version to bump from and therefore nothing to open a bump PR about. Only `jsonguard` needs its release PR merged, and only because 0.2.4 already existed. Verified on the registry, not inferred from the workflow.
+
+**The three `testgate/loud-skips` PRs are now green.** `qcow2 #4` (13/13), `vhd #2` (17/17), `vhdx #4` (10/10). They committed a machine-local absolute path to `forensic-testgate`; with the crate published, they now take `forensic-testgate = "0.1"` from the registry. The `TODO(before merge)` was removed rather than reworded — a marker citing a blocker that no longer exists is itself the stale-marker defect. `cargo vet` cleared via `trust` with criteria **`safe-to-run`** (dev-dependency), per ADR-0018 mechanism 2.
+
+**`jsonguard #5` is merged** — `main` at `41b6438d`, carrying `is_lead_in_skippable = c.is_whitespace() || is_format_char(c)`, so the whole `Cf` category is covered. Release PR **#6 (`chore: release v0.2.5`)** is open, `MERGEABLE`/`CLEAN`, 8 checks passing, bump and CHANGELOG verified correct. Merging it publishes 0.2.5 and unblocks the six lock refreshes in the chain above.
+
 ## Cannot merge yet — summary
 
 | Count | What | Status | Unblocked by |
