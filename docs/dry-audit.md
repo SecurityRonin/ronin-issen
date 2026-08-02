@@ -59,6 +59,7 @@ The single pattern this audit surfaced most often is not duplication. It is a **
 | **MSRV job** (during `timeglyph-core`) | MSRV verified | Bare `cargo` compiled on **1.96** while the job claimed 1.75 — `RUSTUP_TOOLCHAIN` outranks a directory override |
 | **Oracle tests** (1.8) | Suite green | 79 of 206 env-gated sites skip **silently**; a gate that never fires is indistinguishable from one that passed |
 | **`shellitem` README** (1.1) | “fuzzed over `parse_idlist`” | No fuzz target ever existed |
+| **`jsonguard::is_csv_safe()`** (1.9) | `FormulaInjection` not reported — value declared safe | A CR-prefixed payload bypassed the lead-in check; the verdict was clean on a cell that executes on import |
 | **cargo-vet gate** (2.1) | `Cargo Vet` job green | **Three repos where vet aborted before evaluating anything** — `ext4fs-forensic` (mixed versioned/unversioned policy), `disk-forensic` and `forensic-vfs-mount` (`audit-as-crates-io` on a registry dep / on a crate absent from the graph). The job was reporting on nothing |
 | **Oracle differentials** (1.9) | Suite green | Three repos hardcode a macOS-only `qemu-img` path, so every differential has skipped on every CI run |
 
@@ -228,6 +229,22 @@ Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-
 The constitution is explicit that human views must *“formula-guard cells (neutralize leading `=`/`+`/`-`/`@`)”*. Roughly ten CSV output paths carry values that are attacker-controlled **by definition** — `script_key.text`, `value.text`, `host`, `origin`, all carved from evidence. **A carved LevelDB value beginning with `=` becomes a live formula when the examiner opens the CSV in Excel.**
 
 This is the forensic-tool form of the vulnerability: the adversary writes the payload into the artifact, and the tool faithfully hands it to the analyst's spreadsheet.
+
+**Five hand-rolled escapers, four unguarded — and one crate held two contradictory definitions.** `browser-forensic-cli` alone carried four escapers; its `cli.rs:5056` `csv_field` *did* guard, while `export.rs:125`, `report.rs:174` (the plaso `l2t_csv` path) and `cli.rs:2936`/`2969` did not — and the unguarded ones covered the larger surface. Three also failed to quote on a lone `\r`.
+
+**`jsonguard`'s own guard was incomplete, and its verdict function was worse.** A CR-prefixed payload bypassed it: `csv_field` deliberately preserves CR/LF because they drive RFC 4180 quoting, so `"\r=1+1"` reached the cell with the lead-in intact, while `tsv_safe` substituted CR/LF *before* testing the first character and produced an unguarded `" =1+1"`. 0x0D is on OWASP's CSV-injection lead-in list precisely for this.
+
+Sharper still: **`inspect` shared the blind spot, so `is_csv_safe()` returned a clean verdict on a value that executes on import** — a caller trusting the verdict emits the payload raw. That is the tenth instance of this report's through-line, and the only one where the failing check is a *safety verdict* rather than a build gate.
+
+**A live panic, found by the same sweep and proven by execution.** `memory/memory-forensic/crates/memf-windows/src/registry_keys.rs:576` byte-slices a REG_SZ value decoded from a memory image:
+
+```rust
+if s.len() > 80 { format!("{}...", &s[..80]) }
+```
+
+`"A".repeat(79) + "世界"` panics. **The same repo already fixed this exact bug elsewhere** — `src/main.rs:7471` carries a regression test whose comment reads *“it previously byte-sliced `&value[..77]`”*, using that same fixture. Fixed in one crate, test written, and the identical defect survives in a sibling crate of the same repository. Identical shape to the `qemu-img` case in 1.10.
+
+**And the char-safe helper has zero callers.** `jsonguard::cap_display` exists, is correct, and is used by nothing anywhere in the fleet.
 
 **The fix already exists and is unadopted.** `utility/jsonguard` publishes exactly the needed helpers — `csv_field` (with the formula guard), `cap_display` (char-safe truncation), `display_safe`, `tsv_safe`, `jsonl_safe` — and **only 4 repos depend on it**, while three CLIs hand-roll a private `csv_field` instead. Same shape as `safe-read`: the fleet built the shared, correct implementation and then did not adopt it, and the unadopted copies are where the defect lives.
 
