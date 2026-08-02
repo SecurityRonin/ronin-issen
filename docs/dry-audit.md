@@ -128,6 +128,17 @@ Also affected: all three partition repos, among 17 total. `lzo` and `lzvn` go fu
 
 It is recorded in Part 1 rather than among the DRY findings because it is not duplication — it is a **published legal document making a false statement about the terms a user receives the software under**, on 17 public repositories. Every DRY finding in this report is a maintenance cost; this one is an assertion to third parties that does not match the shipped licence.
 
+**Confirmed at exactly 17** by an independent sweep of all 92 repos comparing `docs/terms.md` against `LICENSE` and every `Cargo.toml` `license` key — not just the root manifest. All 17 corrected.
+
+**Four further licence anomalies surfaced by the same sweep, none of them the same defect:**
+
+- **`utility/name-variants` is genuinely MIT** — `LICENSE`, `Cargo.toml`, and no `docs/terms.md` at all. It was never in the contradiction set; it is a repo that **missed the fleet Apache-2.0 migration entirely**. Different problem, different fix.
+- **`utility/shrinkpath` is correct as-is** — genuinely dual-licensed (`MIT OR Apache-2.0`, ships both `LICENSE-APACHE` and `LICENSE-MIT`), and its terms say so accurately. It surfaces on a naive sweep only because there is no plain `LICENSE` file. **Do not "fix" it.**
+- **`filesystem/forensic-vfs-mount` ships no `LICENSE` file at all.** Its `terms.md` and `Cargo.toml` agree on Apache-2.0, and `terms.md:7` links to a `blob/main/LICENSE` that does not exist — a dangling link in a legal document. Adding the file is the fix, not editing prose.
+- **`orchestration/issen` has two member crates declaring the wrong licence.** `crates/issen-shrinkpath/Cargo.toml:7` and `crates/issen-ewf/Cargo.toml:7` both say `license = "MIT"` while the repo and root manifest are Apache-2.0. **These would publish to crates.io under MIT** — and `issen-ewf` is the sharper case, since upstream `ewf-forensic` is Apache-2.0. This is a manifest defect rather than a documentation one, and it is the only instance where the wrong licence would reach the registry.
+
+**A caution for when the generator is eventually adopted.** Running `sync_legal.py render` today would have *regressed* two things beyond its remit: it deletes clauses that exist now (`livedisk-forensic`'s “No guarantee of correctness” and “No professional relationship”, both listed in the generator's own `pending_decisions`), and it replaces repo-specific fact with a generic default — `archive-forensic`'s accurate “decompression and analysis happen in memory (with an optional temp-file spill for large inner streams)” flattens to “all processing happens in memory”. **In a document whose sentences are factual assertions about data handling, that is a regression, not a normalization.** The generator's licence derivation is structurally right; its prose consolidation is gated on decisions the user has not yet made. Land them separately.
+
 Structural remedy, beyond correcting the text: the legal-doc generator derives the licence from `Cargo.toml`/`LICENSE` and **the template cannot override it**, so a rendered document is incapable of disagreeing with the shipped licence. That is the secure-by-design form of the fix — the wrong state becomes unrepresentable rather than merely corrected once.
 
 ### 1.3 Renovate automerges into `main` with nothing blocking it
