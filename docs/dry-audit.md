@@ -154,7 +154,18 @@ The lesson matches the `impl Observation` scope error in 2.7: **surveying the ag
 
 Consolidating the 91 `deny.toml` files surfaced a cargo-deny behaviour that silently disarms part of the advisory gate.
 
-**Observed, by four-way bisect on one repo against one advisory DB:** in cargo-deny 0.19.0, advisories carrying `informational = "unsound"` are *evaluated* when `unmaintained` is set to `"workspace"` or `"transitive"`, and **silently skipped** under the unset default and under the explicit `"all"` and `"none"` values. (`none` → ok, `workspace` → FAILED, `transitive` → FAILED, `all` → ok.) This is reported as observed behaviour; the cause was not traced to cargo-deny's source.
+**Root-caused in cargo-deny's source — and the controlling knob is `unsound`, not `unmaintained`.** An earlier draft reported this as an observed correlation with the `unmaintained` setting. That was a side effect. `src/advisories.rs:77-93` computes the workspace-member set `ws_set` **only** when `unmaintained` is `"workspace"`/`"transitive"`, but `ws_set` is consumed at line 120 for **both** the unmaintained and the unsound branches. `unsound` defaults to `Scope::Workspace` while `unmaintained` defaults to `Scope::All`, so under the defaults `ws_set` is empty, the membership test `ws_set.contains(&dd.krate.id) ^ transitive` is always false, and every `informational = "unsound"` advisory hits `continue 'lup` unreported.
+
+| `unsound` | `unmaintained` | reported? |
+|---|---|---|
+| *default* | unset / `all` / `none` | no |
+| *default* | `workspace` / `transitive` | **yes** |
+| `all` | unset | **yes** |
+| `workspace` | unset | no |
+| `transitive` | unset | **yes** (degenerately — empty `ws_set` XOR `true`) |
+| `none` | unset | no |
+
+**The correct remedy is `unsound = "all"`, which takes the unconditional branch at line 111 and never consults `ws_set`.** Setting `unmaintained = "workspace"` also works today, but it depends on the bug — it would silently stop reporting the day upstream fixes the gating, which is the same failure mode this whole section exists to remove.
 
 Consequence, verified against the working tree:
 
@@ -165,7 +176,13 @@ Consequence, verified against the working tree:
 
 Both repos pass their current gate. Both believe the advisory is dead. **Both still carry the affected crate version.** Two memory-safety unsoundness advisories, in a fleet whose crates parse attacker-controlled evidence images, are currently not surfaced by the mechanism that exists to surface them.
 
-Fixes are ordinary caret widenings — `lru = "0.16"` (≥0.16.3 patched) and `fuser = "0.16"` — and both advisories begin firing under the unified config, which is how they were found.
+**Caret correctness matters here, and an earlier draft got it wrong.** `lru`'s advisory records `patched = [">= 0.16.3"]`, so `lru = "0.16"` — which that draft proposed — still admits 0.16.0–0.16.2 and would have shipped an affected version under a fix label. Resolved at `0.18.1`. `fuser`'s `patched = [">= 0.16.0"]`, so `"0.16"` is correct there.
+
+**Both suppression comments were not merely stale — they were factually wrong about what they suppressed.** `ewf-forensic`'s attributed RUSTSEC-2026-0002 to `console`, asserted it was “genuinely fixed” by an indicatif bump, and described a “phantom console 0.15 CI re-resolution artifact”. The advisory is against `lru`, and **`console` has no RustSec advisory at all.** `4n6mount`'s claimed fuser 0.16's build script dropped non-Linux libfuse support; diffing the crates shows `build.rs` is functionally identical to 0.15.1's — what actually changed is `default = ["libfuse"]` → `default = []`, a one-word fix. A suppression carrying a fabricated rationale is worse than a bare one: it survives review by *looking* diligent.
+
+**Enabling the gate immediately found a third live instance.** `4n6mount` pulls `lru 0.12.5` transitively (`lru 0.12.5 ← ewf 0.4.6 ← forensic-vfs-engine 0.1.7`) and **cannot fix it locally** — published `ewf 0.4.6` requires `lru = "0.12"`, a caret no downstream `cargo update` can cross. It clears only once the `ewf` fix publishes.
+
+**Reachability, stated honestly:** RUSTSEC-2026-0002 is **not** reachable in `ewf-forensic` — `ewf-core` never calls `iter_mut()`, and the advisory is specific to `IterMut::next`/`next_back`. The bump is still right (nothing structurally prevents a future caller, and the affected version should not be in the graph) but it is not a live exploit. RUSTSEC-2021-0154 **is** reachable in `4n6mount`, via `mount2`/`spawn_mount2`.
 
 ### 1.6 Timestamp defects
 
