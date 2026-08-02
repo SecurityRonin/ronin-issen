@@ -285,6 +285,32 @@ if s.len() > 80 { format!("{}...", &s[..80]) }
 
 **And the char-safe helper has zero callers.** `jsonguard::cap_display` exists, is correct, and is used by nothing anywhere in the fleet.
 
+**Correction, from reading `jsonguard` 0.2.4's source rather than reasoning about it.** An earlier draft said a CR-prefixed payload "bypasses the guard" and framed it as a CR/LF-specific gap. The precise defect is narrower in cause and wider in effect:
+
+```rust
+let guarded = match cleaned.chars().next() {
+    Some('=' | '+' | '-' | '@') => alloc::format!("'{cleaned}"),
+    _ => cleaned,
+};
+```
+
+**The guard fires only on character 0.** Anything that occupies position 0 without being a formula character defeats it. Three cases, and they differ in severity:
+
+| Input | Guard fires? | Quoted? | Result |
+|---|---|---|---|
+| `=1+1` | yes | n/a | `'=1+1` — safe |
+| `\r=1+1` | **no** — `next()` is `\r` | yes (`needs_csv_quoting` matches `\r`) | quoted but unguarded |
+| `" =1+1"` (leading space) | **no** | **no** — space is neither stripped nor quote-triggering | **emitted completely bare** |
+
+So the leading-space case is *worse* than the CR case, and neither is CR-specific. **Quoting is not formula-guarding** — an earlier draft treated the two as interchangeable, and a follow-up agent correctly showed CR-prefixed input is quoted while incorrectly concluding the guard was therefore closed. The general fix keys the guard on the first character not in `{space, tab, CR, LF}`.
+
+**A second defect in the same function, and for a forensic tool it is the more serious one.** Line 92 filters through `is_display_unsafe`, which strips `U+0000..=U+001F`, `U+007F`, `U+0080..=U+009F` and bidi controls — while `Guarded.lossy` is set **only** by invalid UTF-8, never by this stripping. So:
+
+- `"a\tb.txt"` → `"ab.txt"`
+- `"\t"` → `""`
+
+Tabs and control characters are legal in filenames on both Linux and NTFS. **The CSV therefore reports a filename that differs from the one on disk, with nothing signalling the difference** — and `write_csv` discards `.lossy` entirely today, so even the flag that does exist is unread. For a tool whose output is evidence, silently altering an identifier and reporting it as observed is a more serious failure than the injection vector it was written to prevent.
+
 **The fix already exists and is unadopted.** `utility/jsonguard` publishes exactly the needed helpers — `csv_field` (with the formula guard), `cap_display` (char-safe truncation), `display_safe`, `tsv_safe`, `jsonl_safe` — and **only 4 repos depend on it**, while three CLIs hand-roll a private `csv_field` instead. Same shape as `safe-read`: the fleet built the shared, correct implementation and then did not adopt it, and the unadopted copies are where the defect lives.
 
 ### 1.11 Oracle differentials that have never run in CI — and the fix was already written
