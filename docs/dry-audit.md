@@ -60,6 +60,8 @@ The single pattern this audit surfaced most often is not duplication. It is a **
 | **Oracle tests** (1.8) | Suite green | 79 of 206 env-gated sites skip **silently**; a gate that never fires is indistinguishable from one that passed |
 | **`shellitem` README** (1.1) | “fuzzed over `parse_idlist`” | No fuzz target ever existed |
 | **`jsonguard::is_csv_safe()`** (1.9) | `FormulaInjection` not reported — value declared safe | A CR-prefixed payload bypassed the lead-in check; the verdict was clean on a cell that executes on import |
+| **`cargo vet --locked`** (1.4) | `Vetting Succeeded` | **80 of 81 repos** run `cargo fetch` first, which *rewrites* `Cargo.lock` in the runner — so `--locked` validates a lock CI regenerated itself, never the committed bytes |
+| **PRs targeting a non-`main` base** | Empty check list, reads as clean | `ci.yml` triggers on `pull_request: branches: [main]`, so a stacked PR dispatches **nothing**. An empty check list means *not run*, not *passed* |
 | **cargo-vet gate** (2.1) | `Cargo Vet` job green | **Three repos where vet aborted before evaluating anything** — `ext4fs-forensic` (mixed versioned/unversioned policy), `disk-forensic` and `forensic-vfs-mount` (`audit-as-crates-io` on a registry dep / on a crate absent from the graph). The job was reporting on nothing |
 | **Oracle differentials** (1.9) | Suite green | Three repos hardcode a macOS-only `qemu-img` path, so every differential has skipped on every CI run |
 
@@ -165,6 +167,21 @@ The lesson matches the `impl Observation` scope error in 2.7: **surveying the ag
 ### 1.5 Two live unsoundness advisories are invisible to the gate meant to catch them
 
 Consolidating the 91 `deny.toml` files surfaced a cargo-deny behaviour that silently disarms part of the advisory gate.
+
+**A second, wider gate failure in the same job — `--locked` asserts nothing in 80 of 81 repos.** The fleet's vet job is shaped:
+
+```yaml
+- name: Fetch dependencies
+  run: cargo fetch
+- name: Check supply chain
+  run: cargo vet --locked
+```
+
+**`cargo fetch` re-resolves and rewrites `Cargo.lock` in the runner** before `--locked` is ever evaluated. So the flag whose entire purpose is *“fail if the committed lock does not match the manifest”* is validating a lock CI just regenerated for itself. Measured: **80 of the 81 repos** running `cargo vet --locked` run `cargo fetch` immediately before it.
+
+The consequence is concrete rather than theoretical. `blazehash`'s committed lock had been out of sync with its manifest since a PR seven weeks earlier — `cargo vet --locked` aborted immediately when run locally, while CI reported the vet gate **green throughout**. The drift was invisible for exactly as long as nobody ran the check by hand.
+
+Fix is one word — `cargo fetch --locked` — or dropping the fetch step, since `cargo vet` fetches what it needs. Until then, every “supply chain verified” signal in the fleet is verifying a file CI wrote rather than the one in the repository.
 
 **Root-caused in cargo-deny's source — and the controlling knob is `unsound`, not `unmaintained`.** An earlier draft reported this as an observed correlation with the `unmaintained` setting. That was a side effect. `src/advisories.rs:77-93` computes the workspace-member set `ws_set` **only** when `unmaintained` is `"workspace"`/`"transitive"`, but `ws_set` is consumed at line 120 for **both** the unmaintained and the unsound branches. `unsound` defaults to `Scope::Workspace` while `unmaintained` defaults to `Scope::All`, so under the defaults `ws_set` is empty, the membership test `ws_set.contains(&dd.krate.id) ^ transitive` is always false, and every `informational = "unsound"` advisory hits `continue 'lup` unreported.
 
