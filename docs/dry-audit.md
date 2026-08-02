@@ -68,6 +68,18 @@ Two more appeared *inside the verification work itself*, and are recorded becaus
 - An equivalence test asserting `h.severity()` against `d.severity()` bound **both** calls to hand-written inherent methods — inherent methods shadow trait methods, so the derive under test was never exercised. Fixed by routing every trait-level assertion through UFCS.
 - A negative-control mutation reported all tests passing because `rustfmt` had reshaped the target block and the string replace never applied. Caught only by an `assert old in text` guard inside the mutation script. Without it, a green negative control that never ran would have been reported — worse than no control at all.
 
+**The operational remedy — a three-way control matrix.** Turning the qemu differentials back on produced the question this report keeps running into: *how do you know a green run actually ran?* The answer that worked, and generalizes to every gate above:
+
+| Control | Setup | Required outcome |
+|---|---|---|
+| **A** | Real oracle present | Pass, in **non-trivial time** |
+| **B** | Oracle resolves to something producing nothing (`/bin/true`) | **Must FAIL** |
+| **C** | Oracle absent | Pass (skip), at **0.00s** |
+
+**B is the positive control** — it proves the test body genuinely invokes the oracle and consumes its output, which a green A alone cannot distinguish from a no-op. **C's `0.00s` is the fingerprint of the old bug**: work never done leaves a timing signature. Measured across five crates: A took 0.20s–5.10s, B failed in every case, C returned 0.00s.
+
+A cautionary detail from running it: the first ewf control-B was itself invalid, because `/bin/true` does not exist on macOS (only `/usr/bin/true`), so the resolver correctly returned `None` and the test skipped — a control that silently did not control. It was caught and re-run. **Even the mechanism for verifying gates needs verifying.**
+
 **The generalization worth keeping:** *logging is not asserting, and passing is not checking.* A gate must be able to fail for the reason it exists, and the only way to know it can is to make it fail on purpose. Every instance above was found by looking at the artifact — the LCOV file, the resolved toolchain, the mutated source — rather than at the summary line. Several of the consolidations recommended in this report are worth doing largely because they replace seven differently-broken gates with one whose failure mode is known.
 
 ---
@@ -274,6 +286,12 @@ const QEMU_IMG: &str = "/opt/homebrew/bin/qemu-img";
 ```
 
 `vhd-forensic/core/tests/qemu_differential.rs` (lines 19 **and** 99) and `qcow2-forensic/forensic/tests/real_images.rs:12`. That path does not exist on the Linux CI runner, so **every qemu differential in those crates has silently skipped on every CI run** — they have never validated anything in CI. `vhdx-forensic`'s own doc comment concedes it: *“these tests skip automatically if qemu-img is not installed, so they run in CI only on machines with QEMU available (the dev machine).”*
+
+**Two further sites, and two repos where the resolver alone would have been inert.** A sweep for `Command::new("/…")` and absolute-path consts found two more: `vhdx-forensic/core/tests/corpus_differential.rs:12` (the same hardcoded qemu path — not merely the doc comment quoted above) and `ewf-forensic/core/tests/corpus_differential.rs:11` (`/usr/local/bin/ewfexport`). Clean by comparison: `sqlite-forensic` already resolves via env + PATH + a `--version` probe, and no hayabusa invocation exists anywhere in the fleet.
+
+**`vhdx-forensic` and `ewf-forensic` never installed the oracle in CI at all**, so fixing the path would have changed nothing — a resolver plus a runner lacking the tool is still a permanent skip. Both needed an install step alongside.
+
+**Outcome — a negative result, and a reassuring one:** with the oracle genuinely present, **every differential passes**, byte-for-byte against `qemu-img` and `ewfexport` across every corpus image. No parser defect was hiding behind the skips. That was the open risk in turning them on, and it did not materialize.
 
 **The correction already exists, and did not propagate one directory.** `qcow2-forensic/**core**/tests/real_images.rs:13` defines `qemu_img_path()` searching `/opt/homebrew`, `/usr/local` and `/usr/bin`, above a comment that states the problem exactly:
 
