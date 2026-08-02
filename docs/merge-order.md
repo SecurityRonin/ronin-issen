@@ -169,6 +169,19 @@ These fix real bugs. Small, independent, and the highest value per merge.
 
 **13 of these 20 are green.** Of the 7 red, five are the PR's own doing — `disk-forensic` #6 (a real `Clippy` + `Coverage` regression on top of two missing trust lines), and `ewf-forensic` #7, `leveldb` #5, `srum` #5, `browser` #8 (each one `cargo vet` entry short). The other two, `blazehash` #6 and `issen` #12, are red on gates their own `main` already fails.
 
+### The jsonguard chain — order-sensitive, do this first
+
+All six CSV consumers require `jsonguard = "0.2"` (a caret that already admits 0.2.5) but their committed locks pin **0.2.4**. So **no manifest edit is needed anywhere** — only a lock refresh, and only after publish.
+
+| Step | Action |
+|---|---|
+| 1 | Merge **`jsonguard #5`** — ready for review, `mergeable: CLEAN`, all 8 checks pass |
+| 2 | Merge the **release-plz PR** it triggers. Its commits are `fix:` type, so 0.2.4 → **0.2.5** |
+| 3 | In each of the six: `cargo update -p jsonguard` — lock moves 0.2.4 → 0.2.5 |
+| 4 | Merge `leveldb #5`, `sqlite #8`, `browser #8`, `srum #5`, `winevt #7`, `blazehash #6` |
+
+**Why the order matters.** Merging the six *before* 0.2.5 publishes ships them against **0.2.4**, which has the `= + - @` guard but **not** the whitespace/`Cf` lead-in fix. They would close the plain injection vector while leaving `" =cmd"`, `\r=cmd` and the zero-width family bypassing it — and read as complete. Still a net improvement, but not the fix the PR titles imply.
+
 **Order within Phase 3:** `jsonguard` **#5 first** — the six CSV consumers resolve to published `jsonguard`, and its guard is incomplete until #5 ships as 0.2.5.
 
 **Ordering constraint:** `ewf-forensic` #6 (`lru`) must merge **and publish** before `4n6mount` can drop its transitive `lru` ignore. `4n6mount` #11 carries that ignore with the removal condition stated inline.
