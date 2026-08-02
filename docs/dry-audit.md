@@ -251,7 +251,17 @@ All three crates sit under the Paranoid-Gatekeeper standard, which forbids exact
 Representative silent form: `container/qcow2-forensic/core/tests/corpus.rs:6` (`fn corpus_dir() -> Option<PathBuf>`, cloned in `vhd`, `vhdx`, `vmdk`).
 Representative loud form: `filesystem/apfs-forensic/core/tests/keyed_nav.rs:120-123`.
 
-### 1.9 CSV formula injection — attacker-controlled evidence written unguarded
+### 1.9 Build output committed to git — and a `.gitignore` that looks correct but matches nothing
+
+Three of 251 repos surveyed have cargo build artifacts tracked in git: `forensicnomicon` (**781** files under `bindings/python/target/`), `vhd-forensic` (**391** under `fuzz/target/`), and `_deprecated/ewf` (**462** under `fuzz/target/`). Fingerprints, `dep-lib-*`, `invoked.timestamp`, `.json` metadata.
+
+**The root cause is not a missing `.gitignore` — both repos had one.** The pattern was written `/target/`, and **the leading slash anchors to the repository root**, so it silently fails to match a nested `target/`. Pair that with a subdirectory containing its own `Cargo.toml` that is *not* a workspace member — cargo gives it its own build directory — and you get an ignore rule that reads correctly and does nothing. That is why the same defect appeared in three repos independently. The fix is the unanchored `target/`, which covers any package root present or future, rather than patching the two observed paths.
+
+**Why it is more than repo bloat: it made routine maintenance destructive.** A `cargo sweep --time 7` across `~/src` deleted **1,143 tracked files**, because every reasonable assumption holds that everything under `target/` is regenerable. Restored via `git restore`, but the trap is live for anyone running any `target/`-cleaning tool. The durable protection is procedural: **run `git status` before any tool that deletes under `target/`.** The failure was not the deletion — it was verifying the operation was safe without verifying the assumption the operation rested on.
+
+**A latent risk found while checking the blast radius.** Those 781 files stay out of `forensicnomicon`'s published crate payload **only incidentally**. Its `[package] exclude` key does *not* list `bindings/`; the protection comes entirely from cargo omitting a subdirectory that contains its own `Cargo.toml`. Delete or rename `bindings/python/Cargo.toml` and 781 build fingerprints begin shipping to crates.io with no warning. Verified via `cargo package --list`: 191 files, zero under `bindings/`. A guarantee resting on a side effect rather than a stated rule — the same shape as most of Part 1.
+
+### 1.10 CSV formula injection — attacker-controlled evidence written unguarded
 
 `parser/leveldb-forensic/leveldb4n6/src/render.rs:45` — `csv_field` quotes a value when it contains `,`, `"`, `\n` or `\r`, and does **nothing else**. There is no neutralization of a leading `=`, `+`, `-` or `@`; a grep for any formula guard in that file returns **zero** matches.
 
@@ -277,7 +287,7 @@ if s.len() > 80 { format!("{}...", &s[..80]) }
 
 **The fix already exists and is unadopted.** `utility/jsonguard` publishes exactly the needed helpers — `csv_field` (with the formula guard), `cap_display` (char-safe truncation), `display_safe`, `tsv_safe`, `jsonl_safe` — and **only 4 repos depend on it**, while three CLIs hand-roll a private `csv_field` instead. Same shape as `safe-read`: the fleet built the shared, correct implementation and then did not adopt it, and the unadopted copies are where the defect lives.
 
-### 1.10 Oracle differentials that have never run in CI — and the fix was already written
+### 1.11 Oracle differentials that have never run in CI — and the fix was already written
 
 **Three repos hardcode the macOS-ARM Homebrew path for their oracle binary:**
 
@@ -305,7 +315,7 @@ Someone diagnosed this, fixed it, and wrote down why — and the sibling crate *
 
 **Six gate variables are silent *and* undocumented** — nothing committed could ever have set them, so the tests behind them may never have run once: `ISSEN_LOGFILE_FIXTURE`, `NTFS_FORENSIC_E01`, `NTFS_FORENSIC_PATH`, `NTFS_FORENSIC_REF`, `BF_BLOCKFILE_CACHE_DIR`, `BR4N6_E01_URL`, `FORENSICNOMICON_MFT_RAW`. (Evidence limit: this shows nothing *committed* sets them; a developer could still export one ad hoc.)
 
-### 1.9 Mandate gaps
+### 1.12 Mandate gaps
 
 | Mandate | Compliant | Gap |
 |---|---|---|
