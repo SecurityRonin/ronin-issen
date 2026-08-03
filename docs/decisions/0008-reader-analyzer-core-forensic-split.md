@@ -72,21 +72,42 @@ default above: prefer it, do not mandate it.
 
 ### Coverage gate
 
-Each crate keeps 100% line coverage (`cargo llvm-cov --lib`, fail on any `DA:n,0`) **except
-lines annotated `// cov:unreachable`**. The analyzer's `audit_record`-style entry points are
-tested end-to-end (build a valid record, drive parse→extract→audit), not just the component
-helpers.
+Each crate keeps 100% line coverage (fail on any `DA:n,0`) **except lines annotated
+`// cov:unreachable`**. The analyzer's `audit_record`-style entry points are tested end-to-end
+(build a valid record, drive parse→extract→audit), not just the component helpers.
+
+**Measure over every test target, and exclude binary shells:**
+
+```
+cargo llvm-cov --workspace --lcov --output-path lcov.info \
+  --ignore-filename-regex '(^|/)src/(main\.rs|bin/)'
+```
+
+**Do not add `--lib`.** It selects *targets*, and it selects only the lib target's own unit
+tests. Integration tests under `tests/` are separate crates producing separate binaries, so
+`--lib` never builds them and records nothing they cover — which silently narrows the claim the
+gate is making from "this code is tested" to "this code is tested from inside `src/`".
+
+`--workspace` does **not** compensate, and an earlier revision of this ADR wrongly said it did.
+`--workspace` selects *packages*; `--lib` selects *targets*. They are orthogonal axes, so
+`--workspace --lib` still cannot see a single integration test. bluetooth-forensic ran exactly
+that invocation and reported **63.27%** on a library its own `tests/hive_seam.rs` covers to
+**97.28%** — the same 147 lines, a different set of binaries executed. The phantom 54-line debt
+invited precisely the wrong repairs: duplicate unit tests for already-tested code, or deleting
+the integration tests that made it green.
+
+Dropping `--lib` pulls binary targets into the report at 0% — the test profile builds them and
+nothing runs them — which would make a 100% gate unsatisfiable for reasons that have nothing to
+do with test quality. Hence the exclusion, not a lowered threshold.
 
 **Coverage is a backstop, not a 100%-for-its-own-sake target.** The number exists to prove
 behavior is exercised and to catch regressions — never pursue it by deleting defensive code or
-contriving meaningless tests. **Pure-library crates** (the reference: vmdk/vhdx/ntfs/qcow2)
-gate on `--lib` at 100%. **Binary-shipping repos** (CLI/TUI/server — e.g. browser-forensic
-with `br4n6`/`bw`/MCP) gate on **`--workspace`** instead, because `--lib` neither counts
-integration-test coverage nor measures `main()`/render-loop bins, so it *understates* a binary
-repo. For those, keep the bin glue thin via the **Humble Object** pattern (decisions in
-testable libs, only an irreducible draw/read/transport shell in `main()`/the loop), ratchet
-the `--workspace` threshold to the actual achieved level (no slack), and document the residual
-untestable shell — do not exempt the glue silently nor drop the bar to hide it.
+contriving meaningless tests. Excluding the bin is not a licence to let it grow: keep the glue
+thin via the **Humble Object** pattern (decisions in testable libs, only an irreducible
+draw/read/transport shell in `main()`/the loop), and drive the CLI itself from an
+`assert_cmd`-style integration test. A binary that has accumulated real logic is a refactor
+owed to the library, not a shell to be exempted — the exclusion covers an irreducible shell,
+and says nothing about a fat one.
 
 **`// cov:unreachable` — defence-in-depth over coverage purism (binding standard).** Panic-free
 parsers keep defensive guard arms (`let Some(x) = … else { continue }`, bounds-checked `.get()`
