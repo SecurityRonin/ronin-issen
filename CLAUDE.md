@@ -6,6 +6,37 @@ Before implementing features, read:
 - `north-star-advisor/ai-context.yml` - Strategic context (start here)
 - `north-star-advisor/docs/INDEX.md` - Documentation hub
 
+## What IS the fleet (binding — the denominator for every fleet-wide count)
+
+**The fleet is the set of git repositories under `~/src/ronin-issen`.** Nothing
+else. Enumerate it from the working tree, never from the GitHub org:
+
+```bash
+find ~/src/ronin-issen -maxdepth 4 -name .git \
+  -not -path '*/.claude/*' -not -path '*/target/*' | sed 's|/\.git$||'
+```
+
+Exclude `_deprecated/` (moved or archived repos kept only for history). That
+yields **93 live repos**.
+
+- **`gh repo list SecurityRonin` is NOT the fleet.** The org holds ~134 repos and
+  sweeps in unrelated projects — alaya, shepherd, pipeguard, colligate, pdf2xlsx,
+  clawpot, doc4n6, nameback, prop-window, rapidcollect,
+  maintainable-vibe-coding — none of which are fleet components.
+- **The wrong denominator corrupts every claim built on it.** A health sweep read
+  *116/134 green, 17 red* against the org and *91/93 green, 1 actionable red*
+  against the fleet: 11 of those reds belonged to repos nobody had asked about,
+  and one more was an archived repo. Percentages over 93 and 134 are not
+  interchangeable.
+- **Read state from `origin/main` or the API, never a local checkout.** A local
+  clone sits at whatever commit it happens to hold. Reading `Cargo.lock` /
+  `ci.yml` locally has produced a *false regression report* right after fixes
+  merged, and a "0 adopters" count when two repos had already adopted. Always
+  `git fetch` then `git show origin/main:<path>`.
+
+An extreme fleet-wide number (0 of N, all of N) is where to check twice — with a
+second, differently-shaped method — before reporting it.
+
 ## Fleet Glossary
 
 Canonical vocabulary, concepts, and the forensic **epistemology** (observed fact vs
