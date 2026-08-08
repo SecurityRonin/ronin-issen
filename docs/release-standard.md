@@ -154,6 +154,21 @@ it's one identity, SmartScreen reputation accrues **fleet-wide**. Fixed values:
   Azure resources + every lived gotcha (azure/login-first, `Artifact Signing …` role names,
   region-specific endpoint, PAYG-to-sign, legal-name match, WAF'd verify link). **Law + values here;
   full runbook in the SOP.**
+- **Immutable OIDC subjects break the plain-name FIC — every renamed/transferred repo needs its
+  own credential (since 2026-07-15).** GitHub now auto-applies the immutable-ID subject form
+  `repo:SecurityRonin@233419394/<repo>@<repoid>:environment:release` to any repo **created, renamed,
+  or transferred** after 2026-07-15; the IDs survive renames, so you **cannot** revert to plain
+  names. A credential matching only plain names — the flexible `securityronin-fleet-release`
+  (`claims['sub'] matches 'repo:SecurityRonin/*:environment:release'`) — then fails
+  **`AADSTS7002131 No matching federated identity record`**. You can't just broaden that wildcard:
+  the flexible-expression validator **rejects** the `@id` shape
+  (`InvalidFederatedIdentityCredentialValue`), and the expression language has **no `or`** (only
+  `matches`/`eq`/`and`). Fix (Microsoft's immutable-subjects migration) — add a **standard
+  subject-based** FIC on `securityronin-ci-signing` (appId `1381bf9d-c6b2-4f17-becd-0fb83083b90d`)
+  with the repo's exact literal subject; leave the shared wildcard untouched:
+  `az ad app federated-credential create --id 1381bf9d-c6b2-4f17-becd-0fb83083b90d --parameters '{"name":"<repo>-release-immutable","issuer":"https://token.actions.githubusercontent.com","subject":"repo:SecurityRonin@233419394/<repo>@<repoid>:environment:release","audiences":["api://AzureADTokenExchange"]}'`.
+  Get the exact subject verbatim from the failing run's log (it prints `subject claim - …`).
+  **prop-window** (renamed from prop-browser) was the first to hit this.
 - **Migration debt:** current Profile-A CLIs ship the Windows `.zip` **unsigned** — wire the signing
   step into each app/CLI `release.yml`.
 
