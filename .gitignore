@@ -10,3 +10,6 @@
 
 # OS / editor cruft
 .DS_Store
+
+# Session scratch: agent worktrees and transcripts. Never governance content.
+.claude/
