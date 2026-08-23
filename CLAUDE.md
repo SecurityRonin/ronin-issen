@@ -169,6 +169,21 @@ a relative `include_bytes!` — **never a symlink** (git on Windows materializes
 large-artifact `/tmp` extraction rule, and the Case-001 Szechuan convergence validation set — is in
 [`docs/test-corpus-standard.md`](docs/test-corpus-standard.md).**
 
+## Fleet Lessons Learned — read before a cross-repo change
+
+[`docs/lessons-learned.md`](docs/lessons-learned.md) records findings that cost real time and
+would otherwise be re-derived in whichever component hits them next: what a `forensic-vfs` version
+bump actually costs (18 reader crates, `E0277` on a mixed graph), why an unseeded fuzz target
+reports millions of clean runs while testing only a magic check, how an ADR's claim about a
+*consumer* rots without any test noticing, and the `git -C … worktree add` relative-path trap that
+makes a multi-repo sweep lie without erroring.
+
+Each entry is a failure that **did not announce itself** — a green run, a plausible number, a
+confident sentence — plus the cheap check that would have caught it. Every entry carries the date it
+was observed, because a lesson naming a version or a count is a fact about a day: verify before
+relying on it. Topic standards own their own gotchas (release-plz's live in
+[`docs/release-standard.md`](docs/release-standard.md)); that file is for what has no better home.
+
 ## Release & Distribution Standard — binaries + Homebrew/apt/winget (every app/CLI repo)
 
 **Law:** releases are automated and reviewed, never hand-cut. **Libraries publish via release-plz**

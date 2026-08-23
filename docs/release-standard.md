@@ -233,6 +233,32 @@ A crate version can be published **once**. **Bump `version` in `Cargo.toml` befo
 in `build`); once published, you must bump (e.g. `0.8.2` → `0.8.3`). To move a not-yet-published tag:
 `git tag -d v… ; git push origin :refs/tags/v… ; git tag -s v… ; git push origin v…`.
 
+### On a `0.x` library, release-plz turns `feat:` into a fleet migration
+
+release-plz picks the bump from the **commit type**, not from whether the change
+actually breaks anything. On a `0.x` crate a `feat:` commit cuts a **minor**
+(`0.7.2` → `0.8.0`), and cargo treats `0.7` and `0.8` as incompatible crates.
+
+Lived, 2026-08-23: a purely *additive* `forensic-vfs` change — a new trait plus
+variants on two already-`#[non_exhaustive]` enums — released as **0.8.0** and
+instantly stranded `forensic-vfs-engine` and the **18 reader crates** it links
+with `features = ["vfs"]` on 0.7. Mixing the two is `E0277` (two incompatible
+`FileSystem`/`DynFs` traits), so a one-line change became an 18-repo coordinated
+release train. A `0.7.3` would have carried the identical API and every consumer
+would have picked it up on a lockfile refresh.
+
+**Before merging a release PR for a `0.x` crate, read the version it proposes and
+count who is pinned to the current minor:**
+
+```bash
+grep -rl 'forensic-vfs = .*"0\.7"' --include=Cargo.toml ~/src/ronin-issen \
+  | grep -v /target/ | cut -d/ -f1-7 | sort -u | wc -l
+```
+
+If the change is additive and the answer is more than a couple, keep it a patch
+(`fix:`/`chore:` framing, or override the version in the release PR). The release
+PR looks routine and the diff is a version string — nothing warns you.
+
 ### App requirement: conventional `--version`
 
 The CLI must support `-V`/`--version` printing `<bin> X.Y.Z` to stdout and exiting **0** (use
