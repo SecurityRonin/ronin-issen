@@ -1,6 +1,72 @@
 # Fleet Test Corpus Standard
 
-Corpus catalog rules and the Case-001 convergence validation set. Referenced from `CLAUDE.md`.
+Corpus catalog rules, how to mint filesystem fixtures on macOS, and the Case-001 convergence
+validation set. Referenced from `CLAUDE.md`.
+
+---
+
+## Minting filesystem fixtures on macOS — rootless podman cannot `mknod`
+
+Any fixture carrying a **character or block device** hits this, and the symptom points at the
+wrong culprit. Rootless podman **cannot create a device node even with `--privileged`**:
+
+```
+$ podman run --rm --privileged ubuntu:24.04 mknod /tmp/c c 1 3
+mknod: /tmp/c: Operation not permitted
+$ grep CapEff /proc/self/status
+CapEff: 000001ffffffffff          # cap_mknod IS present
+```
+
+The capability is namespaced; the kernel requires *real* (init-namespace) `CAP_MKNOD`. It has
+nothing to do with the filesystem being written.
+
+**Run the control before blaming the driver.** `mkfifo` succeeds in the same container while
+`mknod` fails, which reads like a filesystem-driver limitation — it is not. One command settles
+it: if `mknod /tmp/x c 1 3` fails on **tmpfs**, the container is the cause, and no mount option
+will fix it. (Four ntfs-3g option sets — `permissions`, `acl`, `umask=000`, plain — were tried
+before that control was run. All four fail identically, which is itself the tell.)
+
+**The fix on macOS** — a rootful container *inside* the podman VM, no change to the machine's
+default mode:
+
+```sh
+podman machine ssh 'sudo podman run --rm --privileged --device /dev/fuse \
+  -v /Users/<you>/work:/work -v /Users/<you>/work/out:/out \
+  docker.io/library/ubuntu:24.04 bash /work/mint.sh'
+```
+
+- `/Users` is already mounted into the VM, so host bind-mounts work from the rootful container.
+- Image names need the `docker.io/library/` prefix there.
+- **Loop devices:** the container's `/dev` carries only `loop0`, so `losetup -f` names a device
+  that does not exist and fails with `No such file or directory`. Materialize them first —
+  rootful `mknod` works: `for i in 0 1 2 3; do [ -e /dev/loop$i ] || mknod /dev/loop$i b 7 $i; done`
+- **`apt-get update` is never optional** before `apt-get install`: the image pins exact `.deb`
+  versions that 404 once Ubuntu supersedes them.
+
+### What each filesystem can actually express
+
+Do not assume a format records a type just because the OS has one:
+
+| | symlink | char | block | FIFO | socket |
+|---|---|---|---|---|---|
+| **UDF** (ICB `file_type`) | `0x0C` | `0x07` | `0x06` | `0x09` | `0x0A` |
+| **NTFS** — ntfs-3g Interix (default) | `IntxLNK` | `IntxCHR` | `IntxBLK` | **not recorded** | **not recorded** |
+| **NTFS** — ntfs-3g `-o special_files=wsl` | `0xA000001D` | `0x80000025` | `0x80000026` | `0x80000024` | `0x80000023` |
+| **NTFS** — classic Windows | `0xA000000C` | — | — | — | — |
+
+- **Interix cannot express a FIFO or a socket distinguishably.** A FIFO is a zero-length `$DATA`
+  and a socket a one-byte `$DATA`, with no magic — `libntfs-3g/dir.c`'s own comment reads
+  *"FIFO or regular file."* A reader must report `File`; inferring a FIFO from "empty file"
+  fabricates an observation the volume never made.
+- **No Linux tool writes the classic `0xA000000C` / `0xA0000003` tags.** ntfs-3g writes Interix
+  or WSL forms; the in-kernel `ntfs3` driver defines only `MOUNT_POINT` and `SYMLINK` and has no
+  LX tags at all. For those, either author the buffer and let **ntfs-3g's read path** confirm it
+  (it decodes classic tags via the `system.ntfs_reparse_data` xattr), or mint on real Windows
+  with `mklink` and capture `fsutil reparsepoint query` as the answer key.
+
+**"No local tool can create X" and "no local tool can validate X" are different claims.** Most
+format libraries read far more than they write; check the read path separately before reaching
+for heavier infrastructure.
 
 ---
 

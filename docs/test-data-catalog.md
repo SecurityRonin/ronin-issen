@@ -581,6 +581,25 @@ mod real_media_tests` (kind + `partition_start` + `block_size` vs udfinfo PSPACE
 Full per-file provenance + captured oracle output: `udf-forensic/tests/data/README.md`. Redistribution:
 mkudffs output is freely redistributable.
 
+### B9b · udf-forensic — `tests/data/udf_all_node_types.img` (8 MB, committed) · REAL-self ✓ · **T2** (kernel-UDF-driver-minted, driver readback oracle)
+Every non-regular node type UDF can express, in one image. A **superset** of `udf_symlink.img`
+(same `README.txt` / `nested/file.txt` / `nested/readme-link.txt -> ../README.txt` tree, so those
+assertions keep their ground truth) plus a `nodes/` directory carrying one of each. Created by the
+**Linux UDF driver** on a loop mount — `ln -s`, `mknod`, `mkfifo`, and a `bind()`ed `AF_UNIX`
+socket — so the ICB `file_type` bytes are the driver's own.
+
+| path | ICB `file_type` | | path | ICB `file_type` |
+|---|---|---|---|---|
+| `nodes/symlink` | `0x0C` | | `nodes/fifo` | `0x09` |
+| `nodes/chardev` | `0x07` | | `nodes/socket` | `0x0A` |
+| `nodes/blockdev` | `0x06` | | | |
+
+MD5 `350ce39ff0208e1583f96460d37654d9`. Ground truth: the driver's own readback after remount lists
+`b`, `c`, `p`, `s`, `l`; independently confirmed by reading File Entry offset 27 directly
+(`0x04 ×3, 0x05 ×2, 0x06, 0x07, 0x09, 0x0A, 0x0C ×2`). Asserted by `src/vfs.rs mod tests::
+every_non_regular_node_type_is_classified`. **`mknod` needs real `CAP_MKNOD`** — see the minting
+recipe in `test-corpus-standard.md`. Full provenance: `udf-forensic/tests/data/README.md`.
+
 ---
 
 ## C. Filesystem / partition / compression fixtures
@@ -589,6 +608,52 @@ mkudffs output is freely redistributable.
 NTFS boot sector extracted from the **DEF CON 2018** `MaxPowers` E01 via TSK
 `fsstat -o 1026048`. Ground-truth values asserted in `core/tests/real_image.rs`. Redistribution:
 DEF CON CTF.
+
+### C1b · ntfs-forensic — `tests/data/ntfs_all_node_types.zip` (144 KB zipped, 16 MB image) · REAL-self ✓ · **T2** (ntfs-3g-minted, driver readback oracle)
+Every non-regular node type NTFS can carry, in **both** encodings a Linux driver writes. One volume
+mounted twice by **ntfs-3g 2022.10.3** — once in default Interix mode, once with
+`-o special_files=wsl` — so `interix/` and `wsl/` hold the same five nodes in different on-disk
+forms. Superset of `tiny.zip`'s tree.
+
+| node | `interix/` | `wsl/` |
+|---|---|---|
+| symlink | `IntxLNK\x01` | `LX_SYMLINK 0xA000001D` |
+| chardev | `IntxCHR\x00` | `LX_CHR 0x80000025` |
+| blockdev | `IntxBLK\x00` | `LX_BLK 0x80000026` |
+| fifo | **zero-length `$DATA`, no magic** | `LX_FIFO 0x80000024` |
+| socket | **one-byte `$DATA`, no magic** | `AF_UNIX 0x80000023` |
+
+The two bold cells are a **format limitation, not a reader gap** — `libntfs-3g/dir.c`'s own comment
+reads *"FIFO or regular file."* The tests assert `File` there rather than inferring a type the
+volume never recorded. Image MD5 `e6fe500d36b911e12f5bf7d705581a26`. Byte-level confirmation:
+`IntxLNK ×2, IntxCHR ×1, IntxBLK ×1`, each WSL tag ×3, and **zero** classic `0xA000000C` /
+`0xA0000003` — which is why C1c exists. Asserted by `core/tests/node_types.rs`.
+
+### C1c · ntfs-forensic — `tests/data/ntfs_windows_reparse.zip` (217 KB zipped, 63 MB volume) · REAL-self ✓ · **T2 (strong)** (Windows-authored, `fsutil` answer key)
+Classic Windows reparse points, which **no Linux tool can create**: ntfs-3g writes Interix or WSL
+forms, and the in-kernel `ntfs3` driver defines only `MOUNT_POINT` and `SYMLINK` with no LX tags.
+Minted by `diskpart` + `mklink` on **Windows 11 10.0.26200.8875**, VHD detached, NTFS partition
+(MBR type `0x07`, LBA 128) extracted to a raw volume.
+
+| path | tag | `Flags` | `PathBuffer` at | substitute name |
+|---|---|---|---|---|
+| `rel_link.txt` | `0xa000000c` | `1` RELATIVE | `data + 12` | `target.txt` |
+| `abs_link.txt` | `0xa000000c` | `0` | `data + 12` | `\??\W:\target.txt` |
+| `rel_dirlink` | `0xa000000c` | `1` | `data + 12` | `realdir` |
+| `abs_dirlink` | `0xa000000c` | `0` | `data + 12` | `\??\W:\realdir` |
+| `junction` | `0xa0000003` | *(none)* | `data + 8` | `\??\W:\realdir` |
+| `hardlink.txt` | — | — | — | control: not a reparse point |
+
+**Answer key committed alongside the fixture** (`win_reparse_truth.txt`, verbatim `fsutil
+reparsepoint query` output), together with the generator `make-ntfs-reparse-fixture.cmd`. Volume MD5
+`4f2672e79358e15f9e2dfeced4e393d0`. **T2 not T1**: neither the bytes nor the expected values were
+authored by us, but the scenario (which links exist) was chosen — T1 would need a real-world
+installation image where Windows Setup made the junctions.
+
+*Why it earns its place beside the synthetic fixtures:* reverting the `data + 12` symlink base makes
+the test fail with `"xttarget.t"`. Windows stores the **print** name first, so the bug yields a
+plausible-looking filename, where a zero-offset synthetic fixture yields obvious NUL-prefixed
+garbage. Asserted by `core/tests/windows_reparse_oracle.rs`.
 
 ### C2 · mft — `samples/MFT` (13 MB) + `samples/entry_*` + `testdata/*` · REAL ? · **T1** (real $MFT; provenance undocumented) 
 A full real `$MFT` plus hand-picked single records exercising fixup/data-run/ADS edge cases
