@@ -26,7 +26,28 @@ concern* with role suffixes. The repo name is the **umbrella and is NOT itself a
 `browser-forensic-*` (its short form `browser-*` is a generic word → keep the full prefix;
 see the self-describing rule below); there is no `memory-forensic` / `winevt-forensic` /
 `browser-forensic` *crate*. Never rename a suite's analyzer to `<repo>-forensic` (it
-over-claims, collides with the repo name, and breaks Pattern B). Suffixes:
+over-claims, collides with the repo name, and breaks Pattern B).
+
+**Per-parser invariant — every parser is a reader *and* an analyzer (binding).** A "suite"
+(Pattern B) is an *organizational* grouping of parsers under one repo/prefix; it is **not** a
+licence to ship a parser as a reader alone. Every parser — a Pattern-A `<x>` or a Pattern-B
+*family-name* reader crate — owes both a reader and an analyzer, because reading and analysis
+are different concerns pulling in opposite directions (a reader normalizes/skips broken data;
+an auditor must *see* it — ADR-0008). In Pattern B this means each *family-name* reader
+(`browser-forensic-chrome`) has a matching analyzer; the `-integrity` / `-analysis` slots are
+where those analyzers live, never an excuse to omit them. A reader with no analyzer is an
+*incomplete parser*, not a smaller one.
+
+**Suite vs. co-located parsers — decide by the dependency arrows, not the folder.** Crates
+sharing a repo are a genuine *suite* only if they share code (inter-crate `path` deps on a
+common `-core` / domain crate). Parsers that sit in one repo but have **zero** inter-crate
+dependencies are not a suite — they are independent Pattern-A parsers that merely co-locate,
+and each takes the Pattern-A `<x>-core` + `<x>-forensic` shape in its own right. (Lived:
+`chromium-storage-{cache,indexeddb,localstorage}` were grouped as a "suite" yet share no code —
+each depends only on `forensicnomicon` and leaf reader crates, never a sibling; each is its own
+parser and now carries its own core/forensic pair.)
+
+Suffixes:
 
 | suffix | role | examples |
 |---|---|---|
@@ -88,3 +109,7 @@ orphan.
   breaking import paths.
 - Because names are permanent on crates.io after the 72h window, the grammar is settled up
   front rather than corrected post-publish.
+- The per-parser invariant makes "is this parser complete?" a mechanical question — a reader
+  crate with no matching analyzer is a defect a CI check can catch, not a judgment call a
+  reviewer must remember. "Suite" stops being a naming exception and becomes what it always
+  was: a folder.
