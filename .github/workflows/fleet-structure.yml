@@ -1,0 +1,37 @@
+name: fleet-structure
+
+# Enforces the two fleet structural invariants (ADR-0009): per-parser pairing
+# (a reader `-core` owes an analyzer) and member-dir naming (single-parser repos
+# name dirs for their role, not their crate).
+#
+# CI runs the check's SELF-TEST — the fleet's component repos are separate git
+# repos not present in this checkout, so the full audit cannot enumerate them
+# here. The self-test proves both gates still go red on a real violation (a
+# green-only gate is unproven). The full audit is a maintainer command that reads
+# every repo's origin/main:
+#
+#   python3 scripts/fleet_structure_check.py
+#
+# run from a working tree that has the fleet checked out under ~/src/ronin-issen.
+
+on:
+  pull_request:
+    paths: ["scripts/fleet_structure_check.py", ".github/workflows/fleet-structure.yml"]
+  push:
+    branches: [main]
+    paths: ["scripts/fleet_structure_check.py", ".github/workflows/fleet-structure.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    name: check logic self-test (proves the gates can fail)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Self-test (synthetic violations must be caught)
+        run: python3 scripts/fleet_structure_check.py --self-test
