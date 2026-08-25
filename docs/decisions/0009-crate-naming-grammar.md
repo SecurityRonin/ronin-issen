@@ -57,6 +57,15 @@ and each takes the Pattern-A `<x>-core` + `<x>-forensic` shape in its own right.
 each depends only on `forensicnomicon` and leaf reader crates, never a sibling; each is its own
 parser and now carries its own core/forensic pair.)
 
+**Member directories are named for their ROLE, the crate for the format.** A
+single-parser repo's directories are `core/`, `forensic/`, `fuse/`, `cli/` — not
+`<x>-core/`, `<x>-forensic/`. The crate keeps its format-prefixed name via
+`package.name`; only the directory is the bare role. (A multi-parser co-located
+repo is the sole exception — three parsers cannot each own a `core/`, so it keeps
+crate-named directories; a Pattern-B suite nests its crates under `crates/`.)
+Enforced by `scripts/fleet_structure_check.py` (fleet root), which also enforces
+the per-parser pairing above; its self-test proves both gates go red.
+
 Suffixes:
 
 | suffix | role | examples |
