@@ -18,21 +18,19 @@ stale checkout reports phantom violations, as one was nearly filed):
 Otherwise enumerates the fleet from the working tree (the binding definition)
 and reads each repo's state from origin/main. Exit non-zero on any violation.
 """
-import subprocess, pathlib, re, sys
+import os, subprocess, pathlib, re, sys
 
-FLEET = pathlib.Path.home() / "src" / "ronin-issen"
+# FLEET_ROOT lets CI point the audit at a directory of freshly-cloned repos
+# (flat layout) instead of the maintainer's working tree.
+FLEET = pathlib.Path(os.environ.get("FLEET_ROOT", pathlib.Path.home() / "src" / "ronin-issen"))
 
-EXEMPT_REPOS = {
-    "components/knowledge/forensicnomicon",
-    "components/utility/blazehash",
-    "components/utility/timeglyph",
-    "components/codec/lzvn",
-    "components/orchestration/issen",
-}
+# Non-parser repos, matched by repo BASENAME so the same set works whether the
+# repo sits at `components/<layer>/<name>` (local tree) or `<name>` (CI clone).
+EXEMPT_NAMES = {"forensicnomicon", "blazehash", "timeglyph", "lzvn", "issen"}
 ANALYZER_SUFFIXES = ("-forensic", "-integrity", "-analysis")
 
 
-def evaluate(rel, top_members, crate_of, exempt=EXEMPT_REPOS):
+def evaluate(rel, top_members, crate_of, exempt=EXEMPT_NAMES):
     """Pure core: given a repo's top-level member dirs and each dir's crate name,
     return the list of violation messages. No I/O — unit-testable."""
     out = []
@@ -45,8 +43,9 @@ def evaluate(rel, top_members, crate_of, exempt=EXEMPT_REPOS):
                 out.append(f"member dir '{m}' is crate-named; a single-parser repo "
                            f"names dirs for their role (core/forensic/…)")
 
-    # Invariant 1 — per-parser pairing.
-    if core_dirs and rel not in exempt:
+    # Invariant 1 — per-parser pairing. Exempt by repo basename so the same set
+    # works for both the local `components/<layer>/<name>` tree and a flat clone.
+    if core_dirs and rel.rstrip("/").split("/")[-1] not in exempt:
         names = [c for c in crate_of.values() if c]
         if not any(n.endswith(ANALYZER_SUFFIXES) for n in names):
             out.append(f"reader {[crate_of[d] for d in core_dirs]} but no analyzer "

@@ -4,15 +4,16 @@ name: fleet-structure
 # (a reader `-core` owes an analyzer) and member-dir naming (single-parser repos
 # name dirs for their role, not their crate).
 #
-# CI runs the check's SELF-TEST — the fleet's component repos are separate git
-# repos not present in this checkout, so the full audit cannot enumerate them
-# here. The self-test proves both gates still go red on a real violation (a
-# green-only gate is unproven). The full audit is a maintainer command that reads
-# every repo's origin/main:
+#   self-test   — on every change to the check: proves both gates still go RED on
+#                 a synthetic violation (a green-only gate is unproven).
+#   fleet-audit — weekly + on demand: materializes the fleet from the committed
+#                 manifest (scripts/fleet-repos.txt — the fleet is the working
+#                 tree, not the GitHub org, so it cannot be enumerated in CI),
+#                 shallow-clones each repo, and runs the full audit over their
+#                 default branches. Fails if any repo violates an invariant.
 #
+# Maintainers can also run the full audit locally over the working tree:
 #   python3 scripts/fleet_structure_check.py
-#
-# run from a working tree that has the fleet checked out under ~/src/ronin-issen.
 
 on:
   pull_request:
@@ -20,6 +21,9 @@ on:
   push:
     branches: [main]
     paths: ["scripts/fleet_structure_check.py", ".github/workflows/fleet-structure.yml"]
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,6 +31,7 @@ permissions:
 jobs:
   self-test:
     name: check logic self-test (proves the gates can fail)
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -35,3 +40,32 @@ jobs:
           python-version: "3.12"
       - name: Self-test (synthetic violations must be caught)
         run: python3 scripts/fleet_structure_check.py --self-test
+
+  fleet-audit:
+    name: full fleet audit (every repo's default branch)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Materialize the fleet (shallow clones from the manifest)
+        run: |
+          mkdir -p fleet
+          missing=0
+          while read -r slug; do
+            case "$slug" in '' | \#*) continue ;; esac
+            name="${slug##*/}"
+            if ! git clone --quiet --depth 1 "https://github.com/${slug}.git" "fleet/${name}"; then
+              echo "::warning title=fleet clone failed::${slug} could not be cloned — NOT audited"
+              missing=$((missing + 1))
+            fi
+          done < scripts/fleet-repos.txt
+          # No silent caps: fail loudly if repos in the manifest could not be audited.
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::$missing manifest repo(s) could not be cloned — the audit is incomplete"
+            exit 1
+          fi
+      - name: Full fleet audit
+        run: FLEET_ROOT="$PWD/fleet" python3 scripts/fleet_structure_check.py
