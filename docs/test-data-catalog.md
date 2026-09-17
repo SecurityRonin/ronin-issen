@@ -886,8 +886,11 @@ contents, `stat` metadata, `readlink` targets. `file -s` independently reports
 Content asserted by **SHA256, not length** — a wrong indirect walk returns the right
 length with wrong bytes.
 
-**Not committed** (5 GiB). Env-gated on **`UFS2_FREEBSD15_ORACLE`**; skips loudly.
-Stored at `~/src/forensic-corpora/freebsd-15.0-arm64/`. Three-way control run:
+**Gitignored, not absent** (5 GiB). Lives at `ufs-forensic/tests/data/freebsd-ufs.part`
+beside the tests that read it, with the vendor `.xz` next to it as the provenance
+root; kept out of git by narrow extension patterns (this repo commits `ufs2.raw`
+and `ufs2_xattr.img.gz`, so `*.raw`/`*.img` globs would be wrong). Found with no
+environment set; **`UFS2_FREEBSD15_ORACLE`** overrides. Three-way control run:
 pass 8.67 s / one flipped byte → SHA256 FAILS / absent → loud skip ~0 s.
 
 **Does NOT cover extended attributes** — a stock FreeBSD install sets none (0 across
