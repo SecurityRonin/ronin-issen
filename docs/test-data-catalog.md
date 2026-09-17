@@ -856,6 +856,49 @@ Generators (verbatim) + dump-super ground truth in `btrfs-forensic/tests/data/RE
 
 ---
 
+### C13 · ufs-forensic — FreeBSD 15.0 `freebsd-ufs` root partition (5 GiB, gitignored) + minted fixtures · REAL-ext ✓ · **T1**
+
+**Artifact.** GPT partition 4 (`rootfs`) of the official **FreeBSD 15.0-RELEASE arm64**
+cloud image — authored by FreeBSD release engineering (`last modified Fri Nov 28 04:11:25
+2025`), not by this fleet. 38,977 files, 2,331 directories, 1,361 symlinks.
+
+**Source + checksum.**
+`https://download.freebsd.org/releases/VM-IMAGES/15.0-RELEASE/aarch64/Latest/FreeBSD-15.0-RELEASE-arm64-aarch64-BASIC-CLOUDINIT-ufs.qcow2.xz`
+— vendor SHA256 `e8bacaa565d5959a7408b4670947e544551ba26a4d726c04f48d025647a0cd35`
+(published `CHECKSUM.SHA256`), ~558 MiB. **Verified before extraction.**
+
+**Extraction.** `qemu-img convert -O raw` → GPT partition 4 at byte offset
+**1108898816**, size **5368709120** (`dd bs=512 skip=2165818 count=10485760`).
+Extracted partition md5 `918fcd06e4a38de368568575dc531f1e`.
+⚠️ **The offset is NOT MiB-aligned** (= 1057.53 MiB): a `bs=1m skip=1057` extraction
+yields a file of the *correct size* and *wrong content*, caught here only because the
+UFS2 magic read `0x00000000`. macOS `dd` also lacks GNU `iflag=skip_bytes`.
+
+**Oracle (independent).** The FreeBSD kernel's own UFS driver — partition attached
+read-only to a FreeBSD 15.0 guest, mounted `-o ro`; `dumpfs` geometry, `sha256`
+contents, `stat` metadata, `readlink` targets. `file -s` independently reports
+`Unix Fast File system [v2] (little-endian) … volume name rootfs`.
+
+**Coverage.** Indirect-block traversal (`/boot/kernel/kernel` 18,838,832 B = 48× the
+393,216 B direct limit; `/lib/libcrypto.so.35` 5,070,200 B), fragment tails
+(`/COPYRIGHT` 6,070 B), direct-only files, a 146-link hard-link group (inode 1668,
+`/rescue/*`), a 103-entry directory, inline symlinks, and `dumpfs` geometry.
+Content asserted by **SHA256, not length** — a wrong indirect walk returns the right
+length with wrong bytes.
+
+**Not committed** (5 GiB). Env-gated on **`UFS2_FREEBSD15_ORACLE`**; skips loudly.
+Stored at `~/src/forensic-corpora/freebsd-15.0-arm64/`. Three-way control run:
+pass 8.67 s / one flipped byte → SHA256 FAILS / absent → loud skip ~0 s.
+
+**Does NOT cover extended attributes** — a stock FreeBSD install sets none (0 across
+the first 3,000 files). The UFS2 xattr decoder stays **T2** on the self-minted
+`ufs2_xattr.img.gz` (FreeBSD-VM `setextattr`-minted, `lsextattr`/`getextattr` oracle).
+Also present: `ufs2.raw` + carved `ufs2_*.bin` (dfVFS-sourced, env-gated
+`UFS2_DFVFS_ORACLE`). Full provenance in `ufs-forensic/tests/data/README.md`;
+consumed by `ufs-forensic/core/tests/tier1_freebsd15.rs`.
+
+---
+
 ## D. Log / memory / application-artifact corpora
 
 ### D1 · winevt-forensic — `tests/data/` (1.4 GB) · REAL-ext + VENDORED ✓ · **T1**
