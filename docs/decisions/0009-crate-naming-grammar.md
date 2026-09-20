@@ -120,12 +120,51 @@ Settle names *before* publishing; if a rename is needed, do it inside the 72h wi
 republish = clean, no orphan). After 72h, a yank leaves the old name as a permanent reserved
 orphan.
 
+### When `<x>-core` is already taken on crates.io — the collision fallback
+
+`<x>-core` is frequently a generic word someone else has published. Measured
+2026-09-20: `zip-core`, `zfs-core`, `iso9660-core`, `protobuf-core` and
+`bluetooth-core` are **all owned by third parties**. The fallback is therefore
+not a style choice, and a reviewer must not file it as drift:
+
+**Take `<repo>-core` as the package name, and set `[lib] name = "<x>_core"` so
+the import path stays short.** Both halves are required. The package name is
+what crates.io reserves; the `[lib] name` is what `use` statements see, and
+letting it default drags the long form into every consumer.
+
+```toml
+[package]
+name = "zip-forensic-core"   # zip-core is taken
+
+[lib]
+name = "zip_core"            # consumers still write `use zip_core::...`
+```
+
+**Check crates.io before treating any `-core` name as a defect.** Where the
+canonical name IS available, the short form is required — `aff4` (published
+0.2.6) and `ewf` (0.4.10) are genuine deviations, not collisions, since
+`aff4-core` and `ewf-core` are both free.
+
+**Recorded deviation:** `zfs-forensic-core` sets no `[lib] name` and
+`protobuf-forensic-core` sets the long form, so both expose
+`<x>_forensic_core` import paths while `zip`/`iso9660`/`bluetooth` expose the
+short one. Both are published; changing a `[lib] name` breaks every `use`, so
+this is recorded rather than silently corrected.
+
+**A rename is not an edit.** crates.io has no rename: publishing a new name
+leaves the old package permanent and un-deletable. Renaming the fleet's 60
+Pattern-A cores to a uniform `<x>-forensic-core` was costed at 55 new packages,
+179 manifest edits, 601 source files and 55 orphaned names carrying ~199k
+downloads — rejected for a cosmetic gain.
+
 ## Consequences
 
 - Every repo's crates carry consistent, self-describing, bare-readable names; the analyst and
   the crates.io reader see one grammar, not N ad-hoc conventions.
-- Collisions on `<x>` / `<x>-core` are handled by ADR-0008's `[lib] name` mechanism without
-  breaking import paths.
+- Collisions on `<x>` / `<x>-core` are handled by renaming the PACKAGE to `<repo>-core` and
+  pinning `[lib] name` to the short form, so import paths survive (see the collision fallback
+  above). `[lib] name` alone is not the mechanism — the package name must move too, because
+  that is what crates.io reserves.
 - Because names are permanent on crates.io after the 72h window, the grammar is settled up
   front rather than corrected post-publish.
 - The per-parser invariant makes "is this parser complete?" answerable — a parser reader with
