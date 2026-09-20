@@ -64,7 +64,7 @@ an earlier pass measured `core/tests/vfs.rs` for XFS and produced a wrong row).
 
 | reader | read_link | data_streams | hardlinks | deleted_nodes | slack | findings |
 |---|---|---|---|---|---|---|
-| ntfs | yes | **no** | no | yes | no | no |
+| ntfs | yes | yes | **yes** | yes | **yes** | no |
 | apfs | yes | yes | no | no | no | no |
 | hfsplus | yes | yes | no | no | no | no |
 | ext4 | yes | yes | no | no | no | no |
@@ -87,9 +87,17 @@ image we examine.**
 > contributor fixed for us twice. It has since been fixed. Treat every `yes`
 > below as unverified until a named fixture exercises it.
 
-- `hardlinks` — **0 of 11**. ext4, XFS, Btrfs, ZFS, UFS, NTFS, APFS and HFS+ all
-  support hard links. Every one of our readers says no file has any.
-- `slack` — **0 of 11**. File slack is primary evidence.
+- `hardlinks` — **1 of 11** (NTFS, 2026-09-21). ext4, XFS, Btrfs, ZFS, UFS,
+  APFS and HFS+ also support hard links and still say no file has any. NTFS was
+  done first because it is the only one where the answer is a direct read:
+  each name is its own `$FILE_NAME` attribute carrying its own parent
+  reference. The others need a directory walk, except **Btrfs** (`INODE_REF`)
+  and **APFS** (sibling-link records), which have back-references too.
+  Fixture exercised: `ntfs_windows_reparse.img` MFT 39 (`target.txt` +
+  `hardlink.txt`), plus MFT 35 of the sample volume as a must-not-over-report
+  control for the 8.3 DOS alias.
+- `slack` — **1 of 11** (NTFS, 2026-09-21). Fixture exercised: `$Bitmap`
+  (MFT 6), 1792 bytes in 4 clusters → 256 bytes at image offset 2_437_888.
 - `findings` — **0 of 11**.
 - `deleted_nodes` — **1 of 11** (NTFS).
 - `data_streams` — 8 of 11 after the recent xattr work; **NTFS is missing**.
@@ -251,11 +259,11 @@ ordinary the trigger is.
 
 | # | gap | why it ranks here |
 |---|---|---|
-| 1 | **`hardlinks` unimplemented in all 11 readers** | every reader asserts no file has a hard link. Affects 8 of our filesystems. A link count > 1 is how you show one object had several names — routinely material. |
-| 2 | **NTFS ADS unenumerable** | `Zone.Identifier` is the mark-of-the-web. We can read it only if told its name. On the most common evidential filesystem. |
+| 1 | **`hardlinks` unimplemented in 10 of 11 readers** (NTFS done 2026-09-21) | every remaining reader asserts no file has a hard link. Affects 7 more of our filesystems. A link count > 1 is how you show one object had several names — routinely material. **Btrfs `INODE_REF` and APFS sibling links are direct reads like NTFS; the rest need a directory walk.** |
+| 2 | ~~**NTFS ADS unenumerable**~~ — **fixed 2026-09-20** | `data_streams` now enumerates named `$DATA` attributes and `read_at` resolves `StreamId::Named(i)`, validated against TSK `istat` on MFT 8. |
 | 3 | **No ACL / security-descriptor concept anywhere** | NTFS ownership and permissions cannot even be carried. "Who could access this" is unanswerable through our model. |
 | 4 | **WSL POSIX metadata undecoded** | `$LXUID`/`$LXGID`/`$LXMOD`/`$LXDEV`, `LXATTRB`. A developer laptop with WSL is now an ordinary exhibit; uid/gid/mode read as absent. |
-| 5 | **`slack` unimplemented in all 11** | file slack is primary evidence and we report none. |
+| 5 | **`slack` unimplemented in 10 of 11** (NTFS done 2026-09-21) | file slack is primary evidence and every remaining reader reports none. |
 | 6 | **No `rdev`** | device nodes are reported as a class without identity. |
 | 7 | **Contents that live elsewhere** (decmpfs, WOF, dedup, cloud placeholder) | a plain read returns 0 bytes or a stub, with no error — the worst available failure. |
 | 8 | **`deleted_nodes` in 10 of 11** | recovery surface absent outside NTFS. |
