@@ -104,6 +104,32 @@ Always prefer our own (SecurityRonin / `h4x0r`) crates over third-party equivale
 
 A consumer that reads an evidence image MUST NOT know one container/filesystem format from another — it depends on the ABSTRACTION, never on a per-format crate: raw disk images via `disk_forensic::container::open(path)`, logical file containers via `disk_forensic::logical::open(path)`, filesystems over a byte source via `forensic-vfs`. A format special-case (`if ewf {…}`) in a consumer is the smell this policy exists to catch; migrate it to the abstraction. **See [ADR-0011](docs/decisions/0011-vfs-universal-container-abstraction.md).**
 
+## Capability Reporting — absence is not "unimplemented" (binding, every reader)
+
+**A capability a reader does not implement MUST be distinguishable, by the
+caller, from a capability the evidence does not contain.** A reader that returns
+empty for something it simply never decoded tells an examiner *"this file has no
+such thing"* — a negative finding manufactured by us, not read from the image.
+
+This has already cost us four times, one shape each time (**the reader can
+decode it; the VFS adapter never asks**): NTFS `IntxLNK` + UDF `PATH_COMPONENT`
+(both fixed by an OUTSIDE contributor), extended attributes, NTFS alternate data
+streams, and ISO 9660 Rock Ridge `SL`.
+
+- **No new reader may return empty for a capability the format has.** Decode it,
+  or say `Unsupported`.
+- **A capability claim needs a fixture that EXERCISES it.** "Implemented" is not
+  a measurement; "returns X for fixture Y" is. `xattr_passthrough` sat red for
+  weeks because its three images carried no attributes at all.
+- Watch the other mechanisms, not just empty defaults: recognising only one
+  encoding of a feature, `filter_map(Result::ok)` swallowing corruption as
+  absence, a metadata struct with nowhere to put a field, an adapter exposing
+  less than its reader knows.
+
+Coverage, gaps and the feature union (one capability, many on-disk encodings)
+live in [`docs/filesystem-capability-matrix.md`](docs/filesystem-capability-matrix.md).
+**See [ADR-0020](docs/decisions/0020-capability-reporting-absence-is-not-unimplemented.md).**
+
 ## Security & Robustness Standard — Paranoid Gatekeeper (MANDATORY for every `*-core` / `*-forensic` crate)
 
 Every `*-core`/`*-forensic` crate parses untrusted, attacker-controllable images: *never panic, never read out of bounds, never trust a length field.* It meets the global panic-free lint recipe + pre-publish gate + CI shape, plus the forensic superset — bounded `unsafe` only for mmap (`forbid`→`deny` + per-site allow), every integer read through the published `safe-read` crate (NEVER a hand-rolled `bytes.rs`), one fuzz target per parsed structure + a full-pipeline `fuzz_forensic`, and real-artifact CI validation at 100% coverage. **See [ADR-0012](docs/decisions/0012-paranoid-gatekeeper-security-standard.md).**
