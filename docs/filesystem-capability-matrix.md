@@ -69,7 +69,7 @@ an earlier pass measured `core/tests/vfs.rs` for XFS and produced a wrong row).
 | hfsplus | yes | yes | no | no | no | no |
 | ext4 | yes | yes | no | no | no | no |
 | xfs | yes | yes | no | no | no | no |
-| btrfs | yes | yes | no | no | no | no |
+| btrfs | yes | yes | **yes** | no | no | no |
 | udf | yes | yes | no | no | no | no |
 | ufs | yes | yes | no | no | no | no |
 | zfs | yes | yes | no | no | no | no |
@@ -87,12 +87,14 @@ image we examine.**
 > contributor fixed for us twice. It has since been fixed. Treat every `yes`
 > below as unverified until a named fixture exercises it.
 
-- `hardlinks` — **1 of 11** (NTFS, 2026-09-21). ext4, XFS, Btrfs, ZFS, UFS,
+- `hardlinks` — **2 of 11** (NTFS + Btrfs, 2026-09-21). ext4, XFS, Btrfs, ZFS, UFS,
   APFS and HFS+ also support hard links and still say no file has any. NTFS was
   done first because it is the only one where the answer is a direct read:
   each name is its own `$FILE_NAME` attribute carrying its own parent
   reference. The others need a directory walk, except **Btrfs** (`INODE_REF`)
-  and **APFS** (sibling-link records), which have back-references too.
+  and **APFS** (sibling-link records), which have back-references too — Btrfs
+  is now done; APFS recognises `SiblingLink` as a record type but does not yet
+  decode its parent/name.
   Fixture exercised: `ntfs_windows_reparse.img` MFT 39 (`target.txt` +
   `hardlink.txt`), plus MFT 35 of the sample volume as a must-not-over-report
   control for the 8.3 DOS alias.
@@ -259,7 +261,7 @@ ordinary the trigger is.
 
 | # | gap | why it ranks here |
 |---|---|---|
-| 1 | **`hardlinks` unimplemented in 10 of 11 readers** (NTFS done 2026-09-21) | every remaining reader asserts no file has a hard link. Affects 7 more of our filesystems. A link count > 1 is how you show one object had several names — routinely material. **Btrfs `INODE_REF` and APFS sibling links are direct reads like NTFS; the rest need a directory walk.** |
+| 1 | **`hardlinks` unimplemented in 9 of 11 readers** (NTFS + Btrfs done 2026-09-21) | every remaining reader asserts no file has a hard link. Affects 7 more of our filesystems. A link count > 1 is how you show one object had several names — routinely material. **Btrfs `INODE_REF` and APFS sibling links are direct reads like NTFS; the rest need a directory walk.** |
 | 2 | ~~**NTFS ADS unenumerable**~~ — **fixed 2026-09-20** | `data_streams` now enumerates named `$DATA` attributes and `read_at` resolves `StreamId::Named(i)`, validated against TSK `istat` on MFT 8. |
 | 3 | **No ACL / security-descriptor concept anywhere** | NTFS ownership and permissions cannot even be carried. "Who could access this" is unanswerable through our model. |
 | 4 | **WSL POSIX metadata undecoded** | `$LXUID`/`$LXGID`/`$LXMOD`/`$LXDEV`, `LXATTRB`. A developer laptop with WSL is now an ordinary exhibit; uid/gid/mode read as absent. |

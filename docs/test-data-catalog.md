@@ -1613,3 +1613,21 @@ so these are recorded here. Verify a download with `md5 <file>` (macOS) / `md5su
 binary artifact — their fixtures are minted per test run — so they have no rows here.
 
 (The inner `…-235706.dmp` carries its own published SHA256 — see §A6.)
+
+### `btrfs-forensic` — `btrfs_hardlink_leaf.bin` (2026-09-21)
+
+**Synthetic**, self-minted with `btrfs-progs v6.6.3` (asgard). The raw 16384-byte
+`FS_TREE` leaf of a 256 MB image built by `mkfs.btrfs --rootdir`, which preserves
+hard links without needing mount privileges.
+
+- **SHA-256** `07a1b691f4a9c72e175e1ebf9f931550a173d478aeb572ac987f498659c160db`
+- **Ground truth** `btrfs inspect-internal dump-tree -t 5`, committed verbatim as
+  `btrfs_hardlink.fs-tree.txt` beside the fixture
+- **Exercises** one inode (`65011972`) with three names across two parents, one of
+  the items packing two `btrfs_inode_ref` records in 42 bytes; plus a
+  single-named control
+- **Why minted** no existing btrfs fixture contained a hard link — 9 `INODE_REF`
+  items, no inode named twice — so the `hardlinks` capability had nothing to
+  exercise it
+- **Redistribution** ours, no third-party content
+- **Consumed by** `core/tests/hardlinks.rs`
