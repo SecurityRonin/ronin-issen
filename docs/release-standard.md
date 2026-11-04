@@ -21,7 +21,8 @@ the Homebrew dispatch `event-type`. Copy from one of those, then apply the rules
 to **apps/CLIs** (the `*4n6` binaries, `blazehash`, GUI tools) — the `v*` tag drives their binaries +
 Homebrew/apt/winget. **Library *crate* publishing to crates.io is NOT done by the `release.yml` `crate`
 job — it is release-plz's job** (next subsection); a repo that is both a lib and a CLI runs both
-(release-plz publishes the lib crates on merge to `main`; the `v*` tag ships the binary).
+(release-plz publishes the lib crates on merge to `main`; the `v*` tag ships the binary). Where
+release-plz also owns the binary's crate, release-plz cuts that tag itself — see "Lib+CLI repos" below.
 
 ### Library crate publishing — release-plz (PR-based, BINDING fleet standard)
 
@@ -57,7 +58,8 @@ all published via one release PR.
   `security:` type, which `release_commits` (`^(feat|fix|perf|refactor|doc|revert)`) does not match,
   silently stranding the fix on `main` unpublished (lived case: the RUSTSEC-2026-0190 `anyhow` bumps).
 - **Merge the release PR with a MERGE commit, NOT squash** — squash rewrites the version-bump commit
-  release-plz keys on.
+  release-plz keys on. (timeglyph #36 was squash-merged on 2026-11-03 and still published normally, so
+  the stated mechanism is unconfirmed; the rule stands until someone tests it.)
 - **An API-changing `feat` must regenerate the `public-api/*.txt` baseline in the SAME release**, or the
   `public-api` tripwire turns the release PR red:
   `cargo public-api -p <crate> --all-features --omit blanket-impls,auto-trait-impls,auto-derived-impls > public-api/<crate>.txt`
@@ -77,6 +79,43 @@ all published via one release PR.
   `v[0-9]*` trigger (release.yml side) — audit every dual release-plz + tag-release repo for the pair.
 - **Verify the publish landed** on crates.io (independent oracle — the crates.io JSON API needs a
   `User-Agent`), never from a green run alone.
+
+### Lib+CLI repos — release-plz cuts the binary tag (one decision ships every channel)
+
+When the crate that carries the binary is released by release-plz, the `release-plz-release` job also
+cuts the signed `v{version}` tag that triggers `release.yml`. Merging the release PR then ships crates.io,
+the GitHub Release, Homebrew, apt and winget together. Without it a human has to push the tag after each
+release, and the binaries drift behind the crate: on 2026-11-04 several lib+CLI repos' last `v*` tag
+trailed its published crate (disk-forensic 0.11.7 vs `v0.11.0`, forensic-mount 0.6.3 vs `v0.5.0`).
+
+**Reference:** timeglyph `.github/workflows/release-plz.yml`, step "Cut the signed binary-release tag"
+(piloted 2026-11-03: 0.10.0 published, `v0.10.0` signed and verified, release.yml run concluded success).
+Copy the step verbatim and change only the package name. What it relies on:
+- **`RELEASE_PLZ_TOKEN` (org PAT) for the tag push.** A tag pushed with `GITHUB_TOKEN` does not trigger
+  workflows, so release.yml would never run. The step also unsets checkout's persisted
+  `http.https://github.com/.extraheader`, which would otherwise win over the PAT.
+- **`id-token: write` on the release job**: gitsign signs the tag keylessly with the job's OIDC
+  identity. gitsign is downloaded pinned by version and SHA-256. `git verify-tag` checks the signature
+  and the Rekor entry but not the certificate's identity claims; the identity is logged, not enforced.
+- **It runs only after a successful publish**, at the commit release-plz tagged, and skips when the
+  binary's crate was not released or the `v` tag already exists. A manual signed `v*` tag still works.
+- **Remove release.yml's crate-publish job** (`crate` / `publish-crate`): release-plz owns the publish.
+
+**Applies only where release-plz releases the binary's crate.** Rolled out 2026-11-04 to 4n6mount
+(`forensic-mount`), disk-forensic and usb-forensic, all single-crate repos. **Not yet applied**, because
+each needs a decision first:
+- **ewf-forensic (`ewf-cli`), blazehash (`blazehash`), memory-forensic (`mem4n6`), winevt-forensic
+  (`winevt-cli`), sqlite-forensic (`sqlite4n6`)** set `release = false` on the binary's crate, so release
+  -plz never releases it and the step would never fire. Adopting the chain means moving that crate under
+  release-plz. Open questions: whether release-plz bumps a CLI whose library dependency changed but whose
+  own files did not (not established from the docs), and whether the current Cargo.toml version is
+  already on crates.io (if not, the first run after the change publishes and ships it immediately).
+- **browser-forensic (`browser-forensic-cli`), winreg-forensic (`winreg-cli`)**: the binary's crate is
+  `publish = false`; how release-plz treats it outside `git_only` mode is not documented.
+- **forensicnomicon**: its `v*` tags (`v0.11.0`) follow neither `forensicnomicon-cli` (0.1.12) nor the
+  facade (1.11.1), so keying the tag on a crate version would go backwards.
+- **ad1-forensic, vhd-forensic, atx-forensic** are library-only; their release.yml `cargo publish` on a
+  `v*` tag duplicates release-plz and should go, but there is no binary to chain.
 - **A release PR whose ONLY red check is `Cargo Vet` failing `<own-crate>:<newver> missing ["safe-to-deploy"]` means that crate is not declared first-party** — set `audit-as-crates-io = false` under its `[policy."<crate>"]`, never exempt the version (an exemption re-breaks on the very next bump). Every version bump reds the vet job until you do; it silently blocked 28 of 44 open fleet release PRs. Full decision tree for this and every other vet finding: **[ADR-0018](docs/decisions/0018-supply-chain-vet-renovate-policy.md)**.
 - **A `git filter-repo` history rewrite on a PUBLISHED repo silently breaks release-plz — re-point the release tags afterwards.** Rewriting content (a PII/secret scrub) changes the bytes of the already-published version's source, so **no commit reproduces the published `.crate` tarball any more**. release-plz's package-equality check then walks *backwards past the release tag* hunting for a content match, and dies on the first commit whose manifest cannot resolve in an isolated clone — aborting with `failed to determine next versions` / `failed to check package equality for <crate> at commit <sha>`, so **no release PR is ever opened** and the fix sits unpublished while crates.io keeps serving the buggy version. The rewrite also **mis-maps the tags**: filter-repo rewrote `<crate>-v0.1.0` onto a commit *before* the `chore: release v0.1.0` commit that actually carries that version's tree. **Fix: `git tag -f -a <crate>-v<ver> <the chore: release commit>` and `git push --force origin <tag>`** — release-plz then computes the diff and opens the PR normally (never hand-bump the version to work around it; that skips the one reviewable checkpoint before an irreversible publish, and CLAUDE.core.md forbids it). Diagnose with: clone the repo ALONE into a temp dir (`git clone --no-local`) and run `cargo metadata` at HEAD, at the tag, and at the commit named in the error — that isolates which commit is unresolvable. Lived case: discord-desktop-forensic, after the user-id scrub (2026-07-30).
 - **`version + path` deps pointing at SIBLING repos are a release-tooling landmine that CI never catches.** `dep = { version = "0.1", path = "../other-repo/crate" }` resolves fine locally and in CI (the sibling is checked out next door in the components tree) but fails for **every tool that clones the repo alone** — release-plz, `cargo package`, `cargo publish --dry-run` — with `failed to read ../other-repo/crate/Cargo.toml`. Migrate to registry-only (`dep = "0.1"`) as soon as the sibling publishes, and remember the *old commits keep the landmine* for any historical operation (which is exactly how the case above detonated). Verify with an isolated `git clone --no-local` + `cargo metadata`, not a local build.
@@ -311,6 +350,10 @@ auto by the bot.)
 
 ### Cloudsmith (apt)
 
+- **Pin `cloudsmith-cli==1.30.1` or later, never 1.16.0.** 1.16.0 pins `mcp==1.9.1`, which imports a
+  pydantic internal that current pydantic removed, so the CLI dies at import on a fresh runner
+  (timeglyph v0.10.0, 2026-11-04). The `cloudsmith` job is `continue-on-error`, so the release still
+  shows green while apt silently misses the version. Bumped fleet-wide 2026-11-04.
 - One account-wide `CLOUDSMITH_API_KEY`. **The destination repo must exist first** —
   `securityronin/<repo>` at cloudsmith.io (the push 404s otherwise). Public install path:
   `curl -1sLf https://dl.cloudsmith.io/public/securityronin/<repo>/setup.deb.sh | sudo bash`.
