@@ -338,11 +338,16 @@ auto by the bot.)
    e.g. `manifests/s/SecurityRonin/blazehash/<v>/`): `<Id>.yaml` (version), `<Id>.installer.yaml`
    (InstallerType `wix`, Scope `machine`, `ProductCode`, `AppsAndFeaturesEntries` with Product+Upgrade
    codes, the installer URL + SHA256), `<Id>.locale.en-US.yaml` (publisher/license/description/tags).
-4. Submit via the bot, API-only (don't clone the huge winget-pkgs repo): `gh auth switch --user
+4. Submit via the bot, API-only (don't clone the huge winget-pkgs repo). **The bot is logged into `gh`
+   only on the Mac, not on asgard**; elsewhere, use the web UI as the bot. `gh auth switch --user
    securityronin-bot` → `gh repo sync securityronin-bot/winget-pkgs --source microsoft/winget-pkgs` →
    create a branch ref at master → `PUT` the 3 files under
    `manifests/s/SecurityRonin/<bin>/X.Y.Z/` → `POST` a PR `head: securityronin-bot:<branch>`,
    `base: master` → `gh auth switch --user h4x0r`.
+- **`WINGET_TOKEN` must be a classic PAT with `public_repo` AND `workflow`** (the action does not support
+  fine-grained tokens). Without `workflow`, the job fails with `does not have the correct permissions to
+  execute CreateRef` once Microsoft's upstream changes `.github/` and the bot's fork falls behind (timeglyph
+  v0.10.0, 2026-11-04). The job is `continue-on-error`, so the release still shows green.
 - **`PackageIdentifier` must be identical** between the manual first PR and the action's `identifier:`
   input (`SecurityRonin.<bin>`), or future auto-updates orphan.
 - **Keep the MSI `UpgradeCode` stable across versions** (it's fixed in `wix/main.wxs`) — winget keys
